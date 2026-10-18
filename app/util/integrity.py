@@ -251,6 +251,74 @@ def is_deploy_window_open(redis_client):
         return False
 
 
+def _git_head_sha(root):
+    try:
+        r = subprocess.run(["git", "-C", root, "rev-parse", "HEAD"],
+                           capture_output=True, text=True, timeout=10)
+        if r.returncode == 0:
+            return r.stdout.strip()
+    except Exception:
+        pass
+    return None
+
+
+def _git_committed_sha(root, rel):
+    """sha256 of the file as committed in HEAD (what a GitHub deploy would lay down)."""
+    try:
+        r = subprocess.run(["git", "-C", root, "show", f"HEAD:{rel}"],
+                           capture_output=True, timeout=10)
+        if r.returncode == 0:
+            return hashlib.sha256(r.stdout).hexdigest()
+    except Exception:
+        pass
+    return None
+
+
+def _git_authorized_changes(cfg, changes):
+    """A change is authorized when the file's current content equals the content
+    committed in HEAD, i.e. it arrived through the normal GitHub deploy path
+    (deploy.py pulls origin/main). Returns the list of such paths."""
+    root = cfg.get("project_root", PROJECT_ROOT)
+    if _git_head_sha(root) is None:
+        return []
+    ok = []
+    for c in changes:
+        rel = c["path"]
+        full = os.path.join(root, rel)
+        if not os.path.isfile(full):
+            continue
+        committed = _git_committed_sha(root, rel)
+        if committed and committed == _sha256_file(full):
+            ok.append(rel)
+    return ok
+
+
+def _backup_approved(rel, cfg):
+    root = cfg.get("project_root", PROJECT_ROOT)
+    src = os.path.join(root, rel)
+    dst = os.path.join(BACKUP_DIR, rel)
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    shutil.copy2(src, dst)
+
+
+def _rebaseline(manifest, cfg, rels):
+    """Update the trusted baseline for the given files only (leaves any other
+    pending changes baselined as-is) and re-sign the manifest."""
+    root = cfg.get("project_root", PROJECT_ROOT)
+    for rel in rels:
+        full = os.path.join(root, rel)
+        if os.path.isfile(full):
+            st = os.stat(full)
+            manifest["files"][rel] = {
+                "sha256": _sha256_file(full),
+                "size": st.st_size,
+                "mtime": int(st.st_mtime),
+            }
+        else:
+            manifest["files"][rel] = {"sha256": None, "size": None, "mtime": None}
+    _write_manifest(manifest)
+
+
 # --------------------------------------------------------------------------- #
 # audit + notifications
 # --------------------------------------------------------------------------- #
@@ -508,6 +576,28 @@ def _run_check(redis_client=None, cfg=None, manifest=None,
     record["summary"] = (
         f"{len(record['changes'])} changed/removed, {len(record['additions'])} unexpected addition(s)"
     )
+
+    # The normal deploy path is a GitHub push that deploy.py pulls into /syntax,
+    # so a file whose content now matches HEAD arrived through that path and is
+    # authorized. Only out-of-band changes (which differ from HEAD) are restored.
+    authorized_paths = _git_authorized_changes(cfg, record["changes"])
+    if authorized_paths:
+        record["authorized"] = True
+        record["event"] = "authorized_change"
+        record["summary"] = (
+            f"{len(authorized_paths)} change(s) matched HEAD (authorized deploy); "
+            f"baseline updated"
+        )
+        for rel in authorized_paths:
+            try:
+                _backup_approved(rel, cfg)
+            except Exception as e:
+                record["recovery"]["details"].append(f"{rel}: backup failed {e}")
+        _rebaseline(manifest, cfg, authorized_paths)
+        _append_audit(record)
+        if alert:
+            _maybe_alert(record)
+        return record
 
     # record the incident BEFORE recovery
     _append_audit(record)
