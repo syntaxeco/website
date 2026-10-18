@@ -173,25 +173,7 @@ def admin():
     stats['UsersSignedUpToday'] = User.query.filter(User.created > (datetime.utcnow() - timedelta(days=1))).count()
     stats['PendingAssets'] = Asset.query.filter_by(moderation_status=1).count() + PlaceIcon.query.filter_by(moderation_status=1).count() + AssetThumbnail.query.filter_by(moderation_status=1).count() + GroupIcon.query.filter_by(moderation_status=1).count()
     stats['SystemTime'] = datetime.utcnow()
-
-    # ---- dashboard charts (last 3 days) ----
-    _now = datetime.utcnow()
-    _today = datetime(_now.year, _now.month, _now.day)
-    signups_chart = []
-    ingame_chart = []
-    for _i in range(2, -1, -1):
-        _day_start = _today - timedelta(days=_i)
-        _day_end = _day_start + timedelta(days=1)
-        _label = _day_start.strftime('%b %d')
-        _signups = User.query.filter(User.created >= _day_start, User.created < _day_end).count()
-        _ingame = db.session.query(func.count(func.distinct(GameSessionLog.user_id))).filter(
-            GameSessionLog.joined_at >= _day_start,
-            GameSessionLog.joined_at < _day_end
-        ).scalar() or 0
-        signups_chart.append({'label': _label, 'value': _signups})
-        ingame_chart.append({'label': _label, 'value': int(_ingame)})
-
-    return AdminRender('index.html', permissions = userPermissions, stats = stats, user = AuthenticatedUser, signups_chart = signups_chart, ingame_chart = ingame_chart)
+    return render_template('admin/index.html', permissions = userPermissions, stats = stats, user = AuthenticatedUser)
 
 @AdminRoute.route('/gameservers', methods=['GET'])
 def gameservers():
@@ -199,7 +181,7 @@ def gameservers():
 
     gameServers = GameServer.query.all()
 
-    return AdminRender('gameservers/index.html', gameservers = gameServers)
+    return render_template('admin/gameservers/index.html', gameservers = gameServers)
 
 @AdminRoute.route('/gameservers/<serverid>', methods=['GET'])
 def gameservers_view(serverid):
@@ -209,7 +191,7 @@ def gameservers_view(serverid):
     if gameServer is None:
         return redirect("/admin/gameservers")
 
-    return AdminRender('gameservers/view.html', gameserver = gameServer)
+    return render_template('admin/gameservers/view.html', gameserver = gameServer)
 
 @AdminRoute.route('/gameservers/<serverid>/delete', methods=['GET'])
 def gameservers_delete(serverid):
@@ -218,7 +200,7 @@ def gameservers_delete(serverid):
     gameServer : GameServer = GameServer.query.filter_by(serverId=serverid).first()
     if gameServer is None:
         return redirect("/admin/gameservers")
-    return AdminRender("gameservers/delete.html", gameserver = gameServer)
+    return render_template("/admin/gameservers/delete.html", gameserver = gameServer)
 
 @AdminRoute.route('/gameservers/<serverid>/delete', methods=['POST'])
 def gameservers_delete_post(serverid):
@@ -262,7 +244,7 @@ def gameservers_refresh_accesskey(serverid):
         return abort(404)
     
     if request.method == "GET":
-        return AdminRender("gameservers/refresh_accesskey.html", gameserver = GameServerObj)
+        return render_template("admin/gameservers/refresh_accesskey.html", gameserver = GameServerObj)
     else:
         NewAccessKey = ''.join(random.choices(string.ascii_letters + string.digits, k=random.randint(60, 90)))
         req_response = gameserver_comm.perform_post(
@@ -288,7 +270,7 @@ def gameservers_refresh_accesskey(serverid):
 def gameservers_create():
     AdminPermissionRequired('GameServerManager')
 
-    return AdminRender('gameservers/create.html')
+    return render_template('admin/gameservers/create.html')
 
 @AdminRoute.route('/gameservers/create', methods=['POST'])
 def gameservers_create_post():
@@ -315,7 +297,7 @@ def gameservers_create_post():
 def websitemessage():
     AdminPermissionRequired('UpdateWebsiteMessage')
 
-    return AdminRender('websitewidemsg.html', message = redis_controller.get("website_wide_message") or "")
+    return render_template('admin/websitewidemsg.html', message = redis_controller.get("website_wide_message") or "")
 
 @AdminRoute.route('/websitemessage', methods=['POST'])
 def websitemessage_post():
@@ -328,7 +310,7 @@ def websitemessage_post():
 def fflags():
     AdminPermissionRequired('ManageFFlags')
 
-    return AdminRender('fflagsettings/index.html', groups = FflagGroup.query.all())
+    return render_template('admin/fflagsettings/index.html', groups = FflagGroup.query.all())
 
 @AdminRoute.route('/fflags/<int:groupid>', methods=['GET'])
 def fflags_view(groupid : int):
@@ -349,7 +331,7 @@ def fflags_view(groupid : int):
         per_page = 50,
         error_out = False
     )
-    return AdminRender('fflagsettings/view.html', group = FFlagGroupObj, FFlagsLookupResults = GroupFlagsPagination, flagcount = GroupFlagsPagination.total, search = SearchQuery)
+    return render_template('admin/fflagsettings/view.html', group = FFlagGroupObj, FFlagsLookupResults = GroupFlagsPagination, flagcount = GroupFlagsPagination.total, search = SearchQuery)
 
 @AdminRoute.route('/fflags/<int:groupid>/import', methods=['POST'])
 def fflags_import(groupid : int):
@@ -415,7 +397,7 @@ def fflags_import(groupid : int):
 @AdminRoute.route("/asset-copier", methods=['GET'])
 def asset_copier():
     AdminPermissionRequired('CopyAssets')
-    return AdminRender('assetcopier.html')
+    return render_template('admin/assetcopier.html')
 
 @AdminRoute.route("/asset-copier", methods=['POST'])
 def asset_copier_post():
@@ -520,8 +502,8 @@ def manage_assets(assetid = None):
             return redirect("/admin/manage-assets")
         CanManageItemReleasePool = HasAdminPermission("ManageItemReleases")
         IsItemEligibleForItemReleasePool = AssetObj.is_for_sale is False and AssetObj.is_limited is False and AssetObj.sale_count == 0 
-        return AdminRender('manageassets.html', asset = AssetObj, CanManageItemReleasePool = CanManageItemReleasePool, IsItemEligibleForItemReleasePool = IsItemEligibleForItemReleasePool)
-    return AdminRender('manageassets.html')
+        return render_template('admin/manageassets.html', asset = AssetObj, CanManageItemReleasePool = CanManageItemReleasePool, IsItemEligibleForItemReleasePool = IsItemEligibleForItemReleasePool)
+    return render_template('admin/manageassets.html')
 
 @AdminRoute.route("/manage-assets/<int:assetid>/insert-item-pool", methods=['GET'])
 def insert_item_into_pool( assetid : int ):
@@ -547,7 +529,7 @@ def insert_item_into_pool( assetid : int ):
         flash("Item is not eligible for item release pool", "danger")
         return redirect(f"/admin/manage-assets/{str(AssetObj.id)}")
     
-    return AdminRender('insertitemrelasepool.html', asset = AssetObj)
+    return render_template('admin/insertitemrelasepool.html', asset = AssetObj)
 
 @AdminRoute.route("/manage-assets/<int:assetid>/insert-item-pool", methods=['POST'])
 def insert_item_into_pool_post( assetid : int ):
@@ -678,7 +660,7 @@ def item_release_pool_view():
     else:
         NextItemDropDatetime = "You do not have permission to view the next Drop Time"
 
-    return AdminRender("itemreleasepool.html", PlannedItems=PlannedItems, NextItemDropDatetime=NextItemDropDatetime)
+    return render_template("admin/itemreleasepool.html", PlannedItems=PlannedItems, NextItemDropDatetime=NextItemDropDatetime)
 
 
 @AdminRoute.route("/manage-assets", methods=['POST'])
@@ -969,7 +951,7 @@ def PendingAssets():
             "AssetThumbnail": False
         })
 
-    return AdminRender("assetmoderation.html", PendingAssets=PendingAssets)
+    return render_template("admin/assetmoderation.html", PendingAssets=PendingAssets)
 
 def LogModerationAction(
     Actor : User,
@@ -1408,7 +1390,7 @@ def ManageUsers():
     if len(returnList) == 15:
         isThereNextPage = True
 
-    return AdminRender("usermanage/search.html", 
+    return render_template("admin/usermanage/search.html", 
                             query=query, 
                             searchType=searchType, 
                             orderBy=orderBy, 
@@ -1484,7 +1466,8 @@ def ManageUser(userid : int):
     InviteKeyUsed : InviteKey = InviteKey.query.filter_by(used_by=userObj.id).first()
     LastestUserBanObj : UserBan = UserBan.query.filter_by(userid=userObj.id, acknowledged = False).order_by(UserBan.id.desc()).first()
     
-    return AdminRender("usermanage/view.html", 
+    return render_template(
+        "admin/usermanage/view.html", 
         userObj=userObj, 
         isAdministrator=isAdministrator,
         TotalVisits=TotalVisits,
@@ -1512,7 +1495,8 @@ def GiveUserCurrency( userid : int ):
         db.session.add(UserEconomyObj)
         db.session.commit()
 
-    return AdminRender("usermanage/givecurrency.html",
+    return render_template(
+        "admin/usermanage/givecurrency.html",
         userObj = userObj,
         UserEconomyObj = UserEconomyObj
     )
@@ -1594,7 +1578,8 @@ def GiveUserItem( userid : int ):
     if userObj is None:
         return abort(404)
 
-    return AdminRender("usermanage/giveitem.html",
+    return render_template(
+        "admin/usermanage/giveitem.html",
         userObj = userObj
     )
 
@@ -1658,7 +1643,8 @@ def ManageUserAdminPermissions( userid : int ):
     if userObj is None:
         return abort(404)
 
-    return AdminRender("usermanage/manage-admin-perms.html",
+    return render_template(
+        "admin/usermanage/manage-admin-perms.html",
         userObj = userObj
     )
 
@@ -1755,7 +1741,8 @@ def ManageUserBanHistory( userid : int ):
         if Author is None:
             return "Unknown"
         return Author.username
-    return AdminRender("usermanage/banhistory.html",
+    return render_template(
+        "admin/usermanage/banhistory.html",
         userObj = userObj,
         BanHistory = UserBanHistory,
         GetBanAuthorName = GetBanAuthorName
@@ -1773,7 +1760,8 @@ def ManageUserInviteKeysview(userid : int):
         PageNumber = 1
 
     UserInviteKeys = InviteKey.query.filter_by(created_by = userObj.id).order_by(InviteKey.created_at.desc()).paginate( page = PageNumber, per_page = 15, error_out = False )
-    return AdminRender("usermanage/invitekeys.html",
+    return render_template(
+        "admin/usermanage/invitekeys.html",
         userObj = userObj,
         InviteKeys = UserInviteKeys
     )
@@ -1923,7 +1911,7 @@ def ResetUserPassword(userid : int):
         flash("You cannot reset an administrator's password", "danger")
         return redirect(f"/admin/manage-users/{str(userid)}")
 
-    return AdminRender("usermanage/resetpassword.html", userObj=userObj)
+    return render_template("admin/usermanage/resetpassword.html", userObj=userObj)
 
 @AdminRoute.route("/manage-users/<int:userid>/reset-password", methods=['POST'])
 def ResetUserPasswordPost(userid : int):
@@ -1974,7 +1962,7 @@ def BanUser(userid : int):
     
     LastestUserBanObj : UserBan = UserBan.query.filter_by(userid=userObj.id, acknowledged = False).order_by(UserBan.id.desc()).first()
 
-    return AdminRender("usermanage/ban.html", userObj=userObj, LastestUserBanObj=LastestUserBanObj)
+    return render_template("admin/usermanage/ban.html", userObj=userObj, LastestUserBanObj=LastestUserBanObj)
 
 @AdminRoute.route("/manage-users/<int:userid>/ban-user", methods=['POST'])
 def BanUserPost(userid : int):
@@ -2181,7 +2169,7 @@ def ViewUserLoginHistory( userid : int ):
 
     canViewSensitiveInfo = HasAdminPermission('ViewLoginHistoryDetailed')
 
-    return AdminRender("usermanage/loginhistory.html", userObj=userObj, LoginHistory=LoginHistory, AlternateAccounts=AlternateAccounts, canViewSensitiveInfo=canViewSensitiveInfo)
+    return render_template("admin/usermanage/loginhistory.html", userObj=userObj, LoginHistory=LoginHistory, AlternateAccounts=AlternateAccounts, canViewSensitiveInfo=canViewSensitiveInfo)
 
 @AdminRoute.route("/manage-users/<int:userid>/game-sessions", methods=['GET'])
 def ViewUserGameSessions( userid : int ):
@@ -2201,7 +2189,7 @@ def ViewUserGameSessions( userid : int ):
             return "Unknown Place"
         return PlaceAssetObj.name
 
-    return AdminRender("usermanage/gamesessions.html", userObj=userObj, GameSessions=SessionsLogs, get_place_name=get_place_name)
+    return render_template("admin/usermanage/gamesessions.html", userObj=userObj, GameSessions=SessionsLogs, get_place_name=get_place_name)
 
 CategoryToEnum = {
     "purchase": TransactionType.Purchase,
@@ -2278,7 +2266,8 @@ def ViewUserTransactions( userid : int ):
             TransactionInfo["asset"] = None
         FormattedTransactions.append(TransactionInfo)
 
-    return AdminRender("usermanage/transactions.html",
+    return render_template(
+        "admin/usermanage/transactions.html",
         userObj = userObj,
         PageCategory = CategoryArg,
         TransactionInfo = FormattedTransactions,
@@ -2301,7 +2290,8 @@ def ViewUserModeratorNotes( userid : int ):
     def GetUserName( TargetUserId : int ) -> str:
         return User.query.filter_by( id = TargetUserId ).first().username
 
-    return AdminRender("usermanage/moderatornotes.html",
+    return render_template(
+        "admin/usermanage/moderatornotes.html",
         userObj = userObj,
         UserModeratorNotes = UserModeratorNotes,
         GetUserName = GetUserName
@@ -2321,28 +2311,24 @@ def ManageWebsiteFeatures():
             "enabled" : GetWebsiteFeature(feature["name"]),
         })
 
-    return AdminRender("websitefeatures.html", SitesFeaturesStatus=SitesFeaturesStatus, CurrentAdminPanelStyle=GetAdminPanelStyle())
+    return render_template("admin/websitefeatures.html", SitesFeaturesStatus=SitesFeaturesStatus)
 
 @AdminRoute.route("/manage-website-features/<featurename>/disable", methods=['POST'])
 def ManageWebsiteFeaturesDisable(featurename : str):
     AdminPermissionRequired('ManageWebsiteFeatures')
-    if featurename == "AdminPanelStyle":
-        return redirect("/admin/manage-website-features")
     SetWebsiteFeature(featurename, False)
     return redirect("/admin/manage-website-features")
 
 @AdminRoute.route("/manage-website-features/<featurename>/enable", methods=['POST'])
 def ManageWebsiteFeaturesEnable(featurename : str):
     AdminPermissionRequired('ManageWebsiteFeatures')
-    if featurename == "AdminPanelStyle":
-        return redirect("/admin/manage-website-features")
     SetWebsiteFeature(featurename, True)
     return redirect("/admin/manage-website-features")
 
 @AdminRoute.route("/create-user", methods=['GET'])
 def CreateUser():
     AdminPermissionRequired('CreateUser')
-    return AdminRender("createuser.html")
+    return render_template("admin/createuser.html")
 
 @AdminRoute.route("/create-user", methods=['POST'])
 @limiter.limit("5/minute")
@@ -2412,7 +2398,7 @@ def CreateUserPost():
 @AdminRoute.route("/create-giftcard", methods=['GET'])
 def CreateGiftcard():
     AdminPermissionRequired('CreateGiftcard')
-    return AdminRender("creategiftcard.html")
+    return render_template("admin/creategiftcard.html")
 
 @AdminRoute.route("/create-giftcard", methods=['POST'])
 def CreateGiftcardPost():
@@ -2502,12 +2488,12 @@ def CreateGiftcardPost():
     except Exception:
         pass
     flash(f"Created {CopiesAmount} giftcards", "success")
-    return AdminRender("creategiftcard.html", codes=AllCodes)
+    return render_template("admin/creategiftcard.html", codes=AllCodes)
 
 @AdminRoute.route("/update-asset-file", methods=['GET'])
 def UpdateAssetFile():
     AdminPermissionRequired('UpdateAssetFile')
-    return AdminRender("updateassetfile.html")
+    return render_template("admin/updateassetfile.html")
 from app.util import s3helper
 @AdminRoute.route("/update-asset-file", methods=['POST'])
 def UpdateAssetFilePost():
@@ -2569,7 +2555,7 @@ def UpdateAssetFilePost():
 @AdminRoute.route("/copy-bundle", methods=['GET'])
 def CopyBundle():
     AdminPermissionRequired('CopyBundle')
-    return AdminRender("bundlecopier.html")
+    return render_template("admin/bundlecopier.html")
 
 @AdminRoute.route("/copy-bundle", methods=['POST'])
 def CopyBundlePost():
@@ -2603,7 +2589,7 @@ def CopyBundlePost():
 @AdminRoute.route("/create-asset", methods=['GET'])
 def CreateAsset():
     AdminPermissionRequired('CreateAsset')
-    return AdminRender("createasset.html")
+    return render_template("admin/createasset.html")
 
 @AdminRoute.route("/create-asset", methods=['POST'])
 def CreateAssetPost():
@@ -2720,7 +2706,7 @@ def CreateAssetPost():
 @AdminRoute.route("/moderate-asset", methods=['GET'])
 def ModerateAsset():
     AdminPermissionRequired('ModerateAsset')
-    return AdminRender("moderateUGC.html")
+    return render_template("admin/moderateUGC.html")
 
 @AdminRoute.route("/moderate-asset/<int:assetid>", methods=['GET'])
 def ModerateAssetView( assetid : int ):
@@ -2750,7 +2736,8 @@ def ModerateAssetView( assetid : int ):
         else:
             RelatedAssets.append(assetlink.ParentAsset)
 
-    return AdminRender("moderateUGC.html", 
+    return render_template(
+        "admin/moderateUGC.html", 
         AssetObj=AssetObj, 
         AllAssetThumbnails=AllAssetThumbnails, 
         AllAssetVersions=AllAssetVersions,
@@ -3246,7 +3233,7 @@ def LotteryIndex():
         redis_controller.set(f"LotteryLimitedCountCache:{UserObject.id}", str(TotalLimiteds), ex=120)
         return TotalLimiteds
 
-    return AdminRender("lottery/index.html", EligibleUsers=EligibleUsers, GetTotalLimiteds=GetTotalLimiteds, InactiveTime = (datetime.utcnow() - timedelta( days = 31 )) )
+    return render_template("admin/lottery/index.html", EligibleUsers=EligibleUsers, GetTotalLimiteds=GetTotalLimiteds, InactiveTime = (datetime.utcnow() - timedelta( days = 31 )) )
 
 @AdminRoute.route("/lottery", methods=["POST"])
 def LotteryPost():
@@ -3341,112 +3328,3 @@ We apologize for any inconvenience this may have caused.
     flash("Lottery completed", "success")
     return redirect("/admin/lottery")
         
-
-
-# ============================================================
-#  Admin panel style toggle ("new" redesigned shell vs "og" original)
-# ============================================================
-ADMIN_STYLE_KEY = "adminpanelstyle"
-
-def GetAdminPanelStyle() -> str:
-    """Per-admin preference: 'new' (redesigned) or 'og' (original).
-    Stored per user id so each admin picks their own design; defaults to 'og'."""
-    UserObj : User = auth.GetCurrentUser()
-    if UserObj is None:
-        return "og"
-    value = redis_controller.get(f"{ADMIN_STYLE_KEY}:{UserObj.id}")
-    return "new" if value == "new" else "og"
-
-def SetAdminPanelStyle(style : str) -> None:
-    UserObj : User = auth.GetCurrentUser()
-    if UserObj is None:
-        return
-    redis_controller.set(f"{ADMIN_STYLE_KEY}:{UserObj.id}", "og" if style == "og" else "new")
-
-# Sidebar tab groups -> permission required. Anything not listed here is visible
-# to every admin (e.g. the Dashboard).
-ADMIN_NAV_GROUPS = [
-    { "group": "", "items": [
-        { "label": "Dashboard", "url": "/admin/", "icon": "bi-grid-1x2" },
-    ]},
-    { "group": "Moderation", "items": [
-        { "label": "Pending Assets", "url": "/admin/pending-assets", "icon": "bi-hourglass-split", "permission": "AssetModeration" },
-        { "label": "Moderate Asset", "url": "/admin/moderate-asset", "icon": "bi-file-earmark-check", "permission": "ModerateAsset" },
-    ]},
-    { "group": "Assets", "items": [
-        { "label": "Manage Assets", "url": "/admin/manage-assets", "icon": "bi-file-earmark", "permission": "ManageAsset" },
-        { "label": "Create Asset", "url": "/admin/create-asset", "icon": "bi-file-earmark-plus", "permission": "CreateAsset" },
-        { "label": "Asset Copier", "url": "/admin/asset-copier", "icon": "bi-files", "permission": "CopyAssets" },
-        { "label": "Copy Bundle", "url": "/admin/copy-bundle", "icon": "bi-collection", "permission": "CopyBundle" },
-        { "label": "Update RBXM", "url": "/admin/update-asset-file", "icon": "bi-file-earmark-arrow-up", "permission": "UpdateAssetFile" },
-        { "label": "Item Release Pool", "url": "/admin/item-release-pool", "icon": "bi-shuffle", "permission": "ManageItemReleases" },
-        { "label": "Lottery", "url": "/admin/lottery", "icon": "bi-cash-stack", "permission": "Lottery" },
-    ]},
-    { "group": "Users", "items": [
-        { "label": "Manage Users", "url": "/admin/manage-users", "icon": "bi-people", "permission": "ManageUsers" },
-        { "label": "Create User", "url": "/admin/create-user", "icon": "bi-person-plus", "permission": "CreateUser" },
-        { "label": "Create Giftcard", "url": "/admin/create-giftcard", "icon": "bi-gift", "permission": "CreateGiftcard" },
-    ]},
-    { "group": "System", "items": [
-        { "label": "Server Manager", "url": "/admin/gameservers", "icon": "bi-database", "permission": "GameServerManager" },
-        { "label": "Feature Flags", "url": "/admin/fflags", "icon": "bi-flag", "permission": "ManageFFlags" },
-        { "label": "Website Message", "url": "/admin/websitemessage", "icon": "bi-chat-square-text", "permission": "UpdateWebsiteMessage" },
-        { "label": "Website Features", "url": "/admin/manage-website-features", "icon": "bi-gear", "permission": "ManageWebsiteFeatures" },
-    ]},
-]
-
-def BuildAdminNav():
-    """Sidebar groups, filtered to the tabs the current admin may access."""
-    UserObj : User = auth.GetCurrentUser()
-    if UserObj is None:
-        return []
-    permissions = set(GetAdminPermissions())
-    IsOwner = (UserObj.id == 1)
-    nav = []
-    for group in ADMIN_NAV_GROUPS:
-        items = []
-        for item in group["items"]:
-            required = item.get("permission")
-            if required is None or IsOwner or required in permissions:
-                items.append({ "label": item["label"], "url": item["url"], "icon": item["icon"] })
-        if items:
-            nav.append({ "group": group["group"], "links": items })
-    return nav
-
-@AdminRoute.context_processor
-def InjectAdminLayoutContext():
-    # Only pay the cost (and only build the nav) for requests under /admin.
-    if not request.path.startswith("/admin"):
-        return {}
-    try:
-        nav = BuildAdminNav()
-    except Exception:
-        nav = []
-    return { "admin_style": GetAdminPanelStyle(), "admin_nav": nav }
-
-DashboardRoute = Blueprint('admindashboard', __name__, url_prefix='/admin')
-
-@DashboardRoute.before_request
-def dashboard_before_request():
-    if not auth.isAuthenticated():
-        return redirect("/login")
-    UserObj : User = auth.GetCurrentUser()
-    if UserObj is None or not IsUserAnAdministrator(UserObj):
-        return redirect("/home")
-
-@DashboardRoute.route("/set-panel-style/<style>", methods=['POST'])
-def SetAdminPanelStyleRoute(style : str):
-    # No permission requirement: every admin may pick their own panel design.
-    SetAdminPanelStyle(style)
-    NextURL = request.form.get("next", "/admin/")
-    if NextURL not in ("/admin/", "/settings"):
-        NextURL = "/admin/"
-    return redirect(NextURL)
-
-
-def AdminRender(template_name : str, **context):
-    """Render an admin template using whichever panel style is active.
-    In "og" mode the original template (admin_og/...) is used."""
-    if GetAdminPanelStyle() == "og":
-        return render_template("admin_og/" + template_name, **context)
-    return render_template("admin/" + template_name, **context)

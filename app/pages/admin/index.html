@@ -1,54 +1,39 @@
-{% extends 'admin_layout.html' %}
-{% block title %}Dashboard{% endblock %}
+{% extends '__layout__.html' %}
+{% block title %}Admin{% endblock %}
 {% block head %}
-<link href="/static/css/{% if admin_style == 'og' %}admin_og.css{% else %}admin.css{% endif %}" rel="stylesheet"/>
+<link href="/static/css/admin.css" rel="stylesheet"/> <!-- Its just easier to resuse this-->
 {% endblock %}
-{% block admin_content %}
-<div class="admin-hero">
-    <img src="/Thumbs/Head.ashx?x=100&y=100&userId={{user.id}}" width="84" height="84" alt="{{user.username}}">
-    <div>
-        <h2>Welcome back, {{user.username}}</h2>
-        <p class="admin-muted admin-small m-0">Server time: {{stats.SystemTime}} UTC</p>
-    </div>
-</div>
-
-<div class="admin-stat-grid">
-    <div class="admin-stat"><div class="label"><i class="bi bi-people"></i> Users Online</div><div class="value">{{stats.UsersOnline}}</div></div>
-    <div class="admin-stat"><div class="label"><i class="bi bi-controller"></i> Users In-Game</div><div class="value">{{stats.UsersPlaying}}</div></div>
-    <div class="admin-stat"><div class="label"><i class="bi bi-hdd-stack"></i> Active Servers</div><div class="value">{{stats.PlaceServersCount}}</div></div>
-    <div class="admin-stat"><div class="label"><i class="bi bi-person-plus"></i> New Users Today</div><div class="value">{{stats.UsersSignedUpToday}}</div></div>
-    <div class="admin-stat"><div class="label"><i class="bi bi-hourglass-split"></i> Pending Assets</div><div class="value">{{stats.PendingAssets}}</div></div>
-</div>
-
-<div class="admin-chart-grid">
-    <div class="admin-card">
-        <h3 class="admin-card-title"><i class="bi bi-person-plus"></i> Signups &middot; last 3 days</h3>
-        {% set smax = (signups_chart | map(attribute='value') | max) or 1 %}
-        <div class="admin-chart">
-            {% for d in signups_chart %}
-            <div class="admin-chart-col">
-                <div class="admin-chart-val">{{ d.value }}</div>
-                <div class="admin-chart-bar-wrap">
-                    <div class="admin-chart-bar" style="height: {{ (d.value / smax * 100) | round(1) }}%"></div>
+{% block content %}
+<div id="main">
+    <div class="container">
+        <div class="d-md-flex align-items-center mb-1">
+            <div class="d-flex align-items-center mb-2 mb-md-0">
+                <img src="/Thumbs/Head.ashx?x=100&y=100&userId={{user.id}}" class="rounded-2" width="90px" height="90px">
+                <div class="ms-2">
+                    <h3 class="m-0">Welcome, {{user.username}}!</h3>
+                    <p class="m-0" style="font-size: 12px; color: rgb(200,200,200);">Server Time: {{stats.SystemTime}} UTC</b></p>
                 </div>
-                <div class="admin-chart-label">{{ d.label }}</div>
             </div>
-            {% endfor %}
+            <div class="row text-center ms-auto p-2 me-2" style="background-color: rgb(27,27,27);box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);">
+                <p class="col-6 col-md-3 m-0">Users Online: <b class="text-white">{{stats.UsersOnline}}</b></p>
+                <p class="col-6 col-md-3 m-0">Users In-Game: <b class="text-white">{{stats.UsersPlaying}}</b></p>
+                <p class="col-6 col-md-3 m-0">Active Servers: <b class="text-white">{{stats.PlaceServersCount}}</b></p>
+                <p class="col-6 col-md-3 m-0">New users today: <b class="text-white">{{stats.UsersSignedUpToday}}</b></p>
+                <p class="col-6 col-md-3 m-0">Pending Assets: <b class="text-white">{{stats.PendingAssets}}</b></p>
+            </div>
         </div>
-    </div>
-
-    <div class="admin-card">
-        <h3 class="admin-card-title"><i class="bi bi-controller"></i> Users in-game &middot; last 3 days</h3>
-        {% set imax = (ingame_chart | map(attribute='value') | max) or 1 %}
-        <div class="admin-chart">
-            {% for d in ingame_chart %}
-            <div class="admin-chart-col">
-                <div class="admin-chart-val">{{ d.value }}</div>
-                <div class="admin-chart-bar-wrap">
-                    <div class="admin-chart-bar" style="height: {{ (d.value / imax * 100) | round(1) }}%"></div>
+        <div class="row p-2">
+            {% for permission in permissions %}
+                {% if "Hidden" not in permission: %}
+                <div class="col-md-4 mb-1 p-1">
+                    <a href="{{permission.route}}">
+                        <div class="admin-box p-2">
+                            <h2 class="mb-1 text-truncate"><i class="bi {{permission.icon}} me-2"></i>{{permission.Name}}</h2>
+                            <p class="m-0 mb-2 text-truncate">{{permission.Description}}</p>
+                        </div>
+                    </a>
                 </div>
-                <div class="admin-chart-label">{{ d.label }}</div>
-            </div>
+                {% endif %}
             {% endfor %}
         </div>
     </div>

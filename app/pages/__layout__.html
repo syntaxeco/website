@@ -99,6 +99,9 @@
                       <!-- <li><a class="dropdown-item" href="https://synmons.com">Synmons</a></li> -->
                       <li><hr class="dropdown-divider"></li>
                       <li><a class="dropdown-item" href="https://discord.gg/syntax-eco">Discord</a></li>
+                      {% if currentuser.is_admin: %}
+                      <li><a class="dropdown-item" href="/admin/">Admin Panel{% if currentuser.pending_asset_count > 0: %}<span class="badge text-bg-danger ms-1">{{currentuser.pending_asset_count}}</span>{%endif%}</a></li>
+                      {% endif %}
                     </ul>
                   </div>
                 </ul>
@@ -118,9 +121,6 @@
                           <li><a class="dropdown-item" href="/invite-keys">Invite Keys</a></li>
                           <li><a class="dropdown-item" href="/membership">Membership</a></li>
                           <li><a class="dropdown-item" href="/giftcard-redeem">Redeem Codes</a></li>
-                          {% if currentuser.is_admin: %}
-                          <li><a class="dropdown-item" href="/admin/">Admin{% if currentuser.pending_asset_count > 0: %}<span class="badge text-bg-danger ms-1">{{currentuser.pending_asset_count}}</span>{%endif%}</a></li>
-                          {% endif %}
                           <li><hr class="dropdown-divider"></li>
                           <li><form action="/logout" method="post"><input type="hidden" name="csrf_token" value="{{csrf_token()}}"><button class="dropdown-item" style="color:rgb(255, 6, 60);font-weight:600;" type="submit">Logout</button></form></li>
                         </ul>
@@ -140,6 +140,9 @@
             <a href="/download">Downloads</a>
             <!-- <a href="https://synmons.com">Synmons</a> -->
             <a href="https://discord.gg/syntax-eco">Discord</a>
+            {% if currentuser.is_admin: %}
+            <a href="/admin/">Admin Panel{% if currentuser.pending_asset_count > 0: %}<span class="badge text-bg-danger ms-1">{{currentuser.pending_asset_count}}</span>{%endif%}</a>
+            {% endif %}
           </div>
         {% endif %}
         {% if website_wide_message: %}

@@ -1,7 +1,7 @@
-{% extends 'admin_layout.html' %}
+{% extends '__layout__.html' %}
 {% block title %}Admin{% endblock %}
 {% block head %}
-<link href="/static/css/{% if admin_style == 'og' %}admin_og.css{% else %}admin.css{% endif %}" rel="stylesheet"/> <!-- Its just easier to resuse this-->
+<link href="/static/css/admin.css" rel="stylesheet"/> <!-- Its just easier to resuse this-->
 <style>
     .show-on-hover {
         filter: blur(4px);
@@ -13,7 +13,7 @@
     }
 </style>
 {% endblock %}
-{% block admin_content %}
+{% block content %}
 <div id="main">
     <div class="container" style="min-width: 1100px;">
         <div class="d-flex">

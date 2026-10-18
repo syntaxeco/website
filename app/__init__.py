@@ -77,12 +77,29 @@ def create_app(config_class=Config):
     scheduler.init_app(app)
     scheduler.start()
 
+    # Admin-panel anti-tamper: periodic integrity check of security-sensitive
+    # deployment files with automatic restore from owner-approved backups.
+    # Registered after start() so each worker process gets its own heartbeat;
+    # concurrent passes are serialised by a Redis lock inside run_check().
+    try:
+        scheduler.add_job(
+            id='integrity_monitor',
+            func='app.util.integrity:integrity_job',
+            trigger='interval',
+            seconds=60,
+            misfire_grace_time=60,
+            replace_existing=True,
+        )
+        logging.info("Integrity monitor scheduled (60s)")
+    except Exception as e:
+        logging.error(f"Failed to schedule integrity monitor: {e}")
+
     from app.pages.login.login import login
     from app.pages.signup.signup import signup
     from app.pages.static import static
     from app.pages.settings.settings import settings
     from app.pages.home.home import home
-    from app.pages.admin.admin import AdminRoute, DashboardRoute, GetAmountOfPendingAssets, IsUserAnAdministrator
+    from app.pages.admin.admin import AdminRoute, GetAmountOfPendingAssets, IsUserAnAdministrator
     from app.routes.asset import AssetRoute
     from app.routes.authentication import AuthenticationRoute
     from app.routes.jobreporthandler import JobReportHandler
@@ -147,7 +164,6 @@ def create_app(config_class=Config):
     app.register_blueprint(AssetRoute, url_prefix="/")
     app.register_blueprint(AuthenticationRoute, url_prefix="/")
     app.register_blueprint(AdminRoute, url_prefix="/admin")
-    app.register_blueprint(DashboardRoute, url_prefix="/admin")
     app.register_blueprint(JobReportHandler, url_prefix="/")
     app.register_blueprint(ClientInfo, url_prefix="/")
     app.register_blueprint(Thumbnailer, url_prefix="/internal")

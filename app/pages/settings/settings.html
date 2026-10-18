@@ -201,17 +201,6 @@
             </form>
             {% endif %}
         </div>
-
-        {% if IsAdmin %}
-        <div class="d-flex align-items-center mb-2">
-            <p style="width: fit-content;height: 100%;" class="me-auto">
-                Admin Panel Style: <b>{% if AdminPanelStyle == 'og' %}Original{% else %}Redesigned{% endif %}</b>
-            </p>
-            <form action="/admin/set-panel-style/{% if AdminPanelStyle == 'og' %}new{% else %}og{% endif %}" method="post">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                <input type="hidden" name="next" value="/settings"/>
-                <button type="submit" class="btn btn-primary btn-sm d-flex fw-bold">
-                    Switch to {% if AdminPanelStyle == 'og' %}Redesigned{% else %}Original{% endif %}
                 </button>
             </form>
         </div>

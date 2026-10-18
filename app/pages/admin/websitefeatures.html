@@ -1,29 +1,20 @@
-{% extends 'admin_layout.html' %}
+{% extends '__layout__.html' %}
 {% block title %}Admin{% endblock %}
 {% block head %}
-<link href="/static/css/{% if admin_style == 'og' %}admin_og.css{% else %}admin.css{% endif %}" rel="stylesheet"/>
+<link href="/static/css/admin.css" rel="stylesheet"/> <!-- Its just easier to resuse this-->
 <style>
     .bg-dark {
         background-color: rgb(30,30,30) !important;
         box-shadow: 0px 0px 10px 0px rgba(0,0,0,0.75);
     }
-    .admin-style-card {
-        background-color: rgb(30,30,30);
-        border: 1px solid rgb(60,60,60);
-        border-radius: 6px;
-        padding: 16px;
-        margin-bottom: 16px;
-        box-shadow: 0px 0px 10px 0px rgba(0,0,0,0.75);
-    }
 </style>
 {% endblock %}
-{% block admin_content %}
+{% block content %}
 <div id="main">
     <div class="container">
         <a href="/admin" class="btn border-primary btn-sm mb-2">Back to Admin Panel</a>
         <h1>Website Features</h1>
         <p class="m-0" style="font-size:small;">Only turn off certain features when its an emergency!</p>
-
         <div class="row p-2">
             {% for feature in SitesFeaturesStatus: %}
             <div class="col-3 p-2">

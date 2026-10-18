@@ -60,8 +60,7 @@ def settings_page():
         SecondPart = emailParts[1]
         HiddenEmail = FirstPart + "@" + SecondPart 
     IsAdmin = AdminPermissions.query.filter_by(userid=user.id).first() is not None
-    AdminPanelStyle = "new" if redis_controller.get(f"adminpanelstyle:{user.id}") == "new" else "og"
-    return render_template("settings/settings.html", TOTPenabled = user.TOTPEnabled, description=user.description, DiscordUserInfoObj=DiscordUserInfoObj, LinkedEmailObj=LinkedEmailObj, HiddenEmail=HiddenEmail, IsAdmin=IsAdmin, AdminPanelStyle=AdminPanelStyle)
+    return render_template("settings/settings.html", TOTPenabled = user.TOTPEnabled, description=user.description, DiscordUserInfoObj=DiscordUserInfoObj, LinkedEmailObj=LinkedEmailObj, HiddenEmail=HiddenEmail, IsAdmin=IsAdmin)
 
 @settings.route("/settings/description", methods=["POST"])
 @auth.authenticated_required
