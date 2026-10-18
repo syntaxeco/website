@@ -1,0 +1,11 @@
+[0;1;32m●[0m syntax.service - Syntax.eco backend (Flask/gunicorn on :3003)
+     Loaded: loaded (]8;;file://vmi3361315/etc/systemd/system/syntax.service/etc/systemd/system/syntax.service]8;;; [0;1;32menabled[0m; preset: [0;1;32menabled[0m)
+     Active: [0;1;32mactive (running)[0m since Sun 2026-10-18 20:32:58 CEST; 2s ago
+   Main PID: 51749 (gunicorn)
+      Tasks: 2 (limit: 9483)
+     Memory: 109.3M (peak: 109.3M)
+        CPU: 1.945s
+     CGroup: /system.slice/syntax.service
+             └─[0;38;5;245m51749 /syntax/venv/bin/python /syntax/venv/bin/gunicorn -b 0.0.0.0:3003 --preload --workers=8 --threads=20 "app:create_app()"[0m
+
+Oct 18 20:32:58 vmi3361315 systemd[1]: Started syntax.service - Syntax.eco backend (Flask/gunicorn on :3003).

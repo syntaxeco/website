@@ -1,0 +1,171 @@
+
+{% extends '__layout__.html' %}
+{% block title %}Change Email{% endblock %}
+
+{% block head %}
+<link href="/static/css/settings.css" rel="stylesheet"/>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+
+<style>
+    .text-secondary {
+        color: rgb(200, 200, 200) !important;
+    }
+
+    @media (max-width: 576px) {
+        #main {
+            width: 100%;
+            min-width: 0;
+            padding-left: 12px;
+            padding-right: 12px;
+            box-sizing: border-box;
+        }
+
+        .settings-container {
+            width: 100%;
+            max-width: 100%;
+            min-width: 0;
+            box-sizing: border-box;
+        }
+
+        .settings-container h1 {
+            font-size: 1.75rem;
+            overflow-wrap: break-word;
+        }
+
+        .settings-container form {
+            width: 100%;
+            min-width: 0;
+        }
+
+        .settings-container .form-control {
+            width: 100%;
+            min-width: 0;
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+
+        .email-update-row {
+            flex-direction: column;
+            align-items: stretch !important;
+            gap: 12px;
+        }
+
+        .email-update-row .captcha-container {
+            width: 100%;
+            max-width: 100%;
+            margin: 0 !important;
+            display: flex;
+            justify-content: center;
+        }
+
+        .email-update-row .captcha-container .cf-turnstile {
+            max-width: 100%;
+        }
+
+        .email-update-row .update-actions {
+            width: 100%;
+            margin: 0 !important;
+            padding: 0;
+        }
+
+        .email-update-row .update-actions p {
+            margin-bottom: 10px;
+            overflow-wrap: break-word;
+        }
+
+        .email-update-row button {
+            min-height: 42px;
+            white-space: normal;
+        }
+
+        .settings-container .alert {
+            overflow-wrap: anywhere;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="main">
+    <div class="settings-container">
+        <h1>Change Email</h1>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            <div>
+                {% for category, message in messages %}
+                    {% if category == 'error' %}
+                    <div class="alert border p-2 text-center alert-danger border-danger">
+                        {{ message }}
+                    </div>
+                    {% endif %}
+
+                    {% if category == 'success' %}
+                    <div class="alert border p-2 text-center alert-success border-success">
+                        {{ message }}
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+            {% endif %}
+        {% endwith %}
+
+        <form method="post">
+            <div class="form-floating mt-2">
+                <input
+                    type="email"
+                    class="form-control"
+                    id="new-email-input"
+                    name="new-email"
+                    placeholder="New Email"
+                    autocomplete="email"
+                    required
+                >
+                <label for="new-email-input">New Email</label>
+            </div>
+
+            <div class="form-floating mt-1">
+                <input
+                    type="password"
+                    class="form-control"
+                    id="password-input"
+                    name="password"
+                    placeholder="Password"
+                    autocomplete="current-password"
+                    required
+                >
+                <label for="password-input">Password</label>
+            </div>
+
+            <input
+                type="hidden"
+                name="csrf_token"
+                value="{{ csrf_token() }}"
+            />
+
+            <div class="d-flex w-100 align-items-center email-update-row">
+                <div class="captcha-container">
+                    <div
+                        class="cf-turnstile mt-2"
+                        data-theme="dark"
+                        data-sitekey="{{ turnstilekey }}"
+                    ></div>
+                </div>
+
+                <div class="update-actions flex-grow-1 text-center mt-2">
+                    <p class="text-secondary" style="font-size: 14px;">
+                        Please complete the captcha to change your email.
+                    </p>
+
+                    <button
+                        type="submit"
+                        class="btn btn-primary w-100 text-center btn-sm"
+                    >
+                        Update Email
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

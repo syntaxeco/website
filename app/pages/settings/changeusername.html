@@ -1,0 +1,94 @@
+
+{% extends '__layout__.html' %}
+{% block title %}Change Username{% endblock %}
+{% block head %}
+<link href="/static/css/settings.css" rel="stylesheet"/> <!-- Its just easier to resuse this-->
+
+<style>
+    @media (max-width: 576px) {
+        #main {
+            width: 100%;
+            min-width: 0;
+            padding: 12px;
+            box-sizing: border-box;
+        }
+
+        .settings-container {
+            width: 100%;
+            max-width: 100%;
+            min-width: 0;
+            padding: 16px;
+            box-sizing: border-box;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .settings-container h1 {
+            font-size: 1.75rem;
+            line-height: 1.3;
+            overflow-wrap: break-word;
+            margin-bottom: 16px;
+        }
+
+        .settings-container form {
+            width: 100%;
+            min-width: 0;
+        }
+
+        .settings-container .form-floating {
+            width: 100%;
+            min-width: 0;
+        }
+
+        .settings-container .form-control {
+            width: 100%;
+            max-width: 100%;
+            min-width: 0;
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+
+        .settings-container .messagealerts {
+            overflow-wrap: anywhere;
+        }
+
+        .settings-container button[type="submit"] {
+            width: 100%;
+            min-height: 46px;
+            padding: 10px;
+            white-space: normal;
+            line-height: 1.4;
+        }
+    }
+</style>
+{% endblock %}
+{% block content %}
+<div id="main">
+    <div class="settings-container">
+        <h1>Change Username</h1>
+        {% with messages = get_flashed_messages() %}
+        {% if messages %}
+        <div>
+        {% for message in messages %}
+            <div class="alert border border-danger p-2 text-center messagealerts">
+                {{ message }}
+            </div>
+        {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+        <form method="post">
+            <div class="form-floating mt-2">
+                <input type="text" class="form-control" id="new-username-input" name="new-username" placeholder="New Username" autocomplete="username" required>
+                <label for="new-username-input">New Username</label>
+            </div>
+            <div class="form-floating mt-1">
+                <input type="password" class="form-control" id="password-input" name="password" placeholder="Password" autocomplete="current-password" required>
+                <label for="password-input">Password</label>
+            </div>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <button type="submit" class="btn btn-primary mt-2 w-100 text-center">Change Username ( R$ 1000 )</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

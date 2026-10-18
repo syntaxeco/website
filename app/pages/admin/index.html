@@ -1,0 +1,56 @@
+{% extends 'admin_layout.html' %}
+{% block title %}Dashboard{% endblock %}
+{% block head %}
+<link href="/static/css/{% if admin_style == 'og' %}admin_og.css{% else %}admin.css{% endif %}" rel="stylesheet"/>
+{% endblock %}
+{% block admin_content %}
+<div class="admin-hero">
+    <img src="/Thumbs/Head.ashx?x=100&y=100&userId={{user.id}}" width="84" height="84" alt="{{user.username}}">
+    <div>
+        <h2>Welcome back, {{user.username}}</h2>
+        <p class="admin-muted admin-small m-0">Server time: {{stats.SystemTime}} UTC</p>
+    </div>
+</div>
+
+<div class="admin-stat-grid">
+    <div class="admin-stat"><div class="label"><i class="bi bi-people"></i> Users Online</div><div class="value">{{stats.UsersOnline}}</div></div>
+    <div class="admin-stat"><div class="label"><i class="bi bi-controller"></i> Users In-Game</div><div class="value">{{stats.UsersPlaying}}</div></div>
+    <div class="admin-stat"><div class="label"><i class="bi bi-hdd-stack"></i> Active Servers</div><div class="value">{{stats.PlaceServersCount}}</div></div>
+    <div class="admin-stat"><div class="label"><i class="bi bi-person-plus"></i> New Users Today</div><div class="value">{{stats.UsersSignedUpToday}}</div></div>
+    <div class="admin-stat"><div class="label"><i class="bi bi-hourglass-split"></i> Pending Assets</div><div class="value">{{stats.PendingAssets}}</div></div>
+</div>
+
+<div class="admin-chart-grid">
+    <div class="admin-card">
+        <h3 class="admin-card-title"><i class="bi bi-person-plus"></i> Signups &middot; last 3 days</h3>
+        {% set smax = (signups_chart | map(attribute='value') | max) or 1 %}
+        <div class="admin-chart">
+            {% for d in signups_chart %}
+            <div class="admin-chart-col">
+                <div class="admin-chart-val">{{ d.value }}</div>
+                <div class="admin-chart-bar-wrap">
+                    <div class="admin-chart-bar" style="height: {{ (d.value / smax * 100) | round(1) }}%"></div>
+                </div>
+                <div class="admin-chart-label">{{ d.label }}</div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="admin-card">
+        <h3 class="admin-card-title"><i class="bi bi-controller"></i> Users in-game &middot; last 3 days</h3>
+        {% set imax = (ingame_chart | map(attribute='value') | max) or 1 %}
+        <div class="admin-chart">
+            {% for d in ingame_chart %}
+            <div class="admin-chart-col">
+                <div class="admin-chart-val">{{ d.value }}</div>
+                <div class="admin-chart-bar-wrap">
+                    <div class="admin-chart-bar" style="height: {{ (d.value / imax * 100) | round(1) }}%"></div>
+                </div>
+                <div class="admin-chart-label">{{ d.label }}</div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}
