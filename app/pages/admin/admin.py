@@ -2548,12 +2548,13 @@ def UpdateAssetFilePost():
             return redirect("/admin/update-asset-file")
 
         NewImageAsset = Asset(
-            name="Image",
+            name="face",
             description="",
             creator_id=1,
             creator_type=0,
             asset_type=AssetType.Image,
-            created_at=datetime.utcnow()
+            created_at=datetime.utcnow(),
+            moderation_status=0
         )
         db.session.add(NewImageAsset)
         db.session.commit()
@@ -2605,6 +2606,8 @@ def UpdateAssetFilePost():
 
     flash("Asset file updated", "success")
     return redirect("/admin/update-asset-file")
+
+
 
 
 @AdminRoute.route("/copy-bundle", methods=['GET'])
