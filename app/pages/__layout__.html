@@ -232,7 +232,7 @@
             <!-- <a href="https://synmons.com">Synmons</a> -->
             <a href="https://discord.gg/syntax-eco">Discord</a>
             {% if currentuser.is_admin: %}
-            <a href="/admin/">Admin{% if currentuser.pending_asset_count > 0: %}<span class="badge text-bg-danger ms-1">{{currentuser.pending_asset_count}}</span>{%endif%}</a>
+            <a href="/admin/">Admin Panel{% if currentuser.pending_asset_count > 0: %}<span class="badge text-bg-danger ms-1">{{currentuser.pending_asset_count}}</span>{%endif%}</a>
             {% endif %}
           </div>
         {% endif %}
