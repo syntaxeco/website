@@ -2539,13 +2539,8 @@ def UpdateAssetFilePost():
 
     if AssetObj.asset_type == AssetType.Face and not IsRbxmFile:
         AssetFile.seek(0)
-        FaceImageObj = ValidateClothingImage(
-            AssetFile,
-            verifyResolution=False,
-            validateFileSize=False,
-            returnImage=True
-        )
-        if FaceImageObj is False or FaceImageObj is None:
+        FaceImageObj = ValidateClothingImage(AssetFile, verifyResolution=False, validateFileSize=False, returnImage=True)
+        if FaceImageObj == False or FaceImageObj is None:
             flash("Invalid image, Please make sure it is a PNG file", "error")
             return redirect("/admin/update-asset-file")
         if FaceImageObj.size[0] > 1024 or FaceImageObj.size[1] > 1024:
@@ -2558,8 +2553,7 @@ def UpdateAssetFilePost():
             creator_id=1,
             creator_type=0,
             asset_type=AssetType.Image,
-            created_at=datetime.utcnow(),
-            moderation_status=0
+            created_at=datetime.utcnow()
         )
         db.session.add(NewImageAsset)
         db.session.commit()
@@ -2569,30 +2563,26 @@ def UpdateAssetFilePost():
         FaceImageFile.seek(0)
         FaceImageFileContent = FaceImageFile.read()
         FaceImageFileHash = hashlib.sha512(FaceImageFileContent).hexdigest()
-
         if not s3helper.DoesKeyExist(FaceImageFileHash):
             s3helper.UploadBytesToS3(FaceImageFileContent, FaceImageFileHash, contentType="image/png")
-
         assetversion.CreateNewAssetVersion(NewImageAsset, FaceImageFileHash)
 
-        with open("./app/files/Face.rbxmx", "r") as FaceTemplateFile:
-            FaceTemplateFileContent = FaceTemplateFile.read()
+        FaceTemplateFile = open("./app/files/Face.rbxmx", "r")
+        FaceTemplateFileContent = FaceTemplateFile.read()
+        FaceTemplateFile.close()
         FaceTemplateFileContent = FaceTemplateFileContent.format(FaceImageId=str(NewImageAsset.id))
         FaceTemplateFileHash = hashlib.sha512(FaceTemplateFileContent.encode()).hexdigest()
-
         if not s3helper.DoesKeyExist(FaceTemplateFileHash):
             s3helper.UploadBytesToS3(FaceTemplateFileContent, FaceTemplateFileHash)
 
         assetversion.CreateNewAssetVersion(AssetObj, FaceTemplateFileHash)
         AssetObj.updated_at = datetime.utcnow()
-
         db.session.add(AssetModerationLink(ParentAssetId=AssetObj.id, ChildAssetId=NewImageAsset.id))
         db.session.commit()
 
         TakeThumbnail(NewImageAsset.id)
         TakeThumbnail(AssetObj.id)
-
-        flash("Face updated (PNG → Face Decal)", "success")
+        flash("Face asset file updated", "success")
         return redirect("/admin/update-asset-file")
 
     if AssetObj.asset_type == AssetType.Image:
@@ -2601,7 +2591,6 @@ def UpdateAssetFilePost():
             flash("Invalid image", "error")
             return redirect("/admin/update-asset-file")
     else:
-        # Hats and all other types must be valid rbxm/rbxmx
         isValidPlaceFile = ValidatePlaceFile(AssetFile)
         if type(isValidPlaceFile) is str:
             flash(f"Validation Failed: {isValidPlaceFile}", "error")
@@ -2616,7 +2605,6 @@ def UpdateAssetFilePost():
 
     flash("Asset file updated", "success")
     return redirect("/admin/update-asset-file")
-
 
 
 @AdminRoute.route("/copy-bundle", methods=['GET'])
