@@ -5,7 +5,7 @@
   © COPYRIGHT 2026 SYNTAX.ECO
   DO NOT COPY, MODIFY, OR REDISTRIBUTE THIS CODE
   WITHOUT PERMISSION FROM SYNTAX.ECO
-  PAGE GENERATED AqT : {{ datetime_utcnow() }} UTC
+  PAGE GENERATED AT : {{ datetime_utcnow() }} UTC
 <![endif]-->
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -51,6 +51,9 @@
             .main-nav-dropdown {
               display: none;
             }
+            #currencydiv .currency-balance {
+              display: contents;
+            }
           }
           @media screen and (max-width: 991.98px) {
             #navbarSupportedContent {
@@ -61,7 +64,7 @@
               display: flex !important;
               flex-flow: row nowrap !important;
               align-items: center;
-              gap: 10px;
+              gap: 5px;
               width: 100%;
               max-width: 100%;
               min-width: 0;
@@ -71,12 +74,11 @@
             #currencydiv > a:first-child {
               display: flex;
               align-items: center;
-              flex: 1 1 120px;
+              flex: 0 1 auto;
               min-width: 0;
-              max-width: none;
+              max-width: 38%;
               margin-right: 0 !important;
               overflow: hidden;
-              gap: 8px;
             }
             #currencydiv > a:first-child img {
               flex: 0 0 32px;
@@ -92,7 +94,7 @@
             #currencydiv .currency-balance {
               display: inline-flex;
               align-items: center;
-              gap: 4px;
+              gap: 2px;
               flex: 0 1 auto;
               min-width: 0;
               white-space: nowrap;
@@ -109,7 +111,7 @@
               display: flex !important;
               flex: 0 0 32px;
               width: 32px;
-              margin-left: 0 !important;
+              margin-left: auto !important;
               justify-content: center;
             }
             #currencydiv > .nav-item.dropdown > a {
@@ -121,41 +123,23 @@
           document.addEventListener("DOMContentLoaded", function () {
             const currencyDiv = document.getElementById("currencydiv");
             if (!currencyDiv) return;
-            const balances = Array.from(currencyDiv.querySelectorAll(".currency-balance > span:last-child"));
-            const profileName = currencyDiv.querySelector("> a:first-child span");
-            const settings = currencyDiv.querySelector(":scope > .nav-item.dropdown");
-            const compactNumber = function (value, level) {
+            const balances = currencyDiv.querySelectorAll(".currency-balance > span:last-child");
+            const compactNumber = function (value) {
               const raw = value.trim().replace(/,/g, "");
-              if (!/^\\d+$/.test(raw)) return value;
+              if (!/^\d+$/.test(raw)) return value;
               const number = Number(raw);
-              if (level >= 3 && number >= 1000000000) return (number / 1000000000).toFixed(number >= 10000000000 ? 0 : 1).replace(/\\.0$/, "") + "B";
-              if (level >= 2 && number >= 1000000) return (number / 1000000).toFixed(number >= 10000000 ? 0 : 1).replace(/\\.0$/, "") + "M";
-              if (level >= 1 && number >= 1000) return (number / 1000).toFixed(number >= 10000 ? 0 : 1).replace(/\\.0$/, "") + "K";
+              if (number >= 1000000000) return (number / 1000000000).toFixed(number >= 10000000000 ? 0 : 1).replace(/\.0$/, "") + "B";
+              if (number >= 1000000) return (number / 1000000).toFixed(number >= 10000000 ? 0 : 1).replace(/\.0$/, "") + "M";
+              if (number >= 100000) return (number / 1000).toFixed(number >= 1000000 ? 0 : 1).replace(/\.0$/, "") + "K";
               return value;
             };
             const updateBalances = function () {
               const isMobile = window.matchMedia("(max-width: 991.98px)").matches;
               balances.forEach(function (balance) {
                 if (!balance.dataset.fullValue) balance.dataset.fullValue = balance.textContent.trim();
-                balance.textContent = balance.dataset.fullValue;
+                const fullValue = balance.dataset.fullValue;
+                balance.textContent = isMobile ? compactNumber(fullValue) : fullValue;
               });
-              if (!isMobile) return;
-              let level = 0;
-              const fits = function () {
-                return currencyDiv.scrollWidth <= currencyDiv.clientWidth + 1;
-              };
-              while (!fits() && level < 3) {
-                level += 1;
-                balances.forEach(function (balance) {
-                  balance.textContent = compactNumber(balance.dataset.fullValue, level);
-                });
-              }
-              if (profileName) {
-                profileName.style.textOverflow = "ellipsis";
-                profileName.style.overflow = "hidden";
-                profileName.style.whiteSpace = "nowrap";
-              }
-              if (settings) settings.style.flexShrink = "0";
             };
             updateBalances();
             window.addEventListener("resize", updateBalances);
@@ -225,6 +209,9 @@
                           <li><a class="dropdown-item" href="/invite-keys">Invite Keys</a></li>
                           <li><a class="dropdown-item" href="/membership">Membership</a></li>
                           <li><a class="dropdown-item" href="/giftcard-redeem">Redeem Codes</a></li>
+                          {% if currentuser.is_admin: %}
+                          <li><a class="dropdown-item" href="/admin/">Admin{% if currentuser.pending_asset_count > 0: %}<span class="badge text-bg-danger ms-1">{{currentuser.pending_asset_count}}</span>{%endif%}</a></li>
+                          {% endif %}
                           <li><hr class="dropdown-divider"></li>
                           <li><form action="/logout" method="post"><input type="hidden" name="csrf_token" value="{{csrf_token()}}"><button class="dropdown-item" style="color:rgb(255, 6, 60);font-weight:600;" type="submit">Logout</button></form></li>
                         </ul>
@@ -244,9 +231,6 @@
             <a href="/download">Downloads</a>
             <!-- <a href="https://synmons.com">Synmons</a> -->
             <a href="https://discord.gg/syntax-eco">Discord</a>
-            {% if currentuser.is_admin: %}
-            <a href="/admin/">Admin Panel{% if currentuser.pending_asset_count > 0: %}<span class="badge text-bg-danger ms-1">{{currentuser.pending_asset_count}}</span>{%endif%}</a>
-            {% endif %}
           </div>
         {% endif %}
         {% if website_wide_message: %}
