@@ -2538,8 +2538,9 @@ def UpdateAssetFilePost():
     IsRbxmFile = AssetFileContent[:7] == b"<roblox"
 
     if AssetObj.asset_type == AssetType.Face and not IsRbxmFile:
-        AssetFile.seek(0)
-        FaceImageObj = ValidateClothingImage(AssetFile, verifyResolution=False, validateFileSize=False, returnImage=True)
+        FaceFileForValidation = BytesIO(AssetFileContent)
+        FaceFileForValidation.seek(0)
+        FaceImageObj = ValidateClothingImage(FaceFileForValidation, verifyResolution=False, validateFileSize=False, returnImage=True)
         if FaceImageObj == False or FaceImageObj is None:
             flash("Invalid image, Please make sure it is a PNG file", "error")
             return redirect("/admin/update-asset-file")
