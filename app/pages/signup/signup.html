@@ -25,12 +25,21 @@
                 <input type="text" id="username" name="username" class="form-control" placeholder="Username" value="" required>
                 <input type="password" name="password" id="password" class="form-control" placeholder="Password" value="" required>
                 <input type="text" id="invite-key" name="invite-key" class="form-control mb-2" placeholder="Invite Key" value="" autocomplete="off" required>
+
                 <div id="checkboxTerms">
                     <input class="form-check-input" name="agreetoTermsandPrivacy" type="checkbox" id="agreeCheckbox" required>
                     <label class="form-check-label" for="agreeCheckbox">
                         <p>I agree to the <a href="/terms">Terms of Service</a> and <a href="/privacy">Privacy Policy</a></p>
                     </label>
                 </div>
+
+                <div id="checkboxTerms">
+                    <input class="form-check-input" name="acknowledgeRevival" type="checkbox" id="revivalCheckbox" required>
+                    <label class="form-check-label" for="revivalCheckbox">
+                        <p>I understand that this is an independent revival of Syntax and is not affiliated with or endorsed by its original creator.</p>
+                    </label>
+                </div>
+
                 <div class="cf-turnstile d-table mb-2" style="margin: 0 auto;" data-theme="dark" data-sitekey="{{turnstilekey}}"></div>
                 {% if SignupEnabled: %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>{%endif%}
                 <button type="submit" class="btn btn-primary mb-3" {% if not SignupEnabled: %}disabled{% endif %}>Signup</button>
