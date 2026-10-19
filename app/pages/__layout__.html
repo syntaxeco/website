@@ -1,3 +1,4 @@
+```
 <!doctype html>
 <html lang="en" data-bs-theme="dark">
     <head>
@@ -51,6 +52,54 @@
           @media screen and (min-width: 992px) {
             .main-nav-dropdown {
               display: none;
+            }
+          }
+          @media screen and (max-width: 991.98px) {
+            #navbarSupportedContent {
+              width: 100%;
+              min-width: 0;
+            }
+            #currencydiv {
+              display: flex !important;
+              flex-wrap: wrap;
+              align-items: center;
+              gap: 8px 10px;
+              width: 100%;
+              min-width: 0;
+              padding: 8px 0 12px;
+            }
+            #currencydiv > a:first-child {
+              display: flex;
+              align-items: center;
+              flex: 1 1 100%;
+              min-width: 0;
+              margin-right: 0 !important;
+            }
+            #currencydiv > a:first-child img {
+              flex: 0 0 32px;
+            }
+            #currencydiv > a:first-child span {
+              min-width: 0;
+              overflow-wrap: anywhere;
+              word-break: break-word;
+            }
+            #currencydiv > a:not(:first-child),
+            #currencydiv > span {
+              flex: 0 0 auto;
+            }
+            #currencydiv > .nav-item.dropdown {
+              margin-left: auto !important;
+            }
+            #currencydiv .currency-balance {
+              display: inline-flex;
+              align-items: center;
+              gap: 5px;
+              min-width: 0;
+              max-width: 100%;
+            }
+            #currencydiv .currency-balance span:last-child {
+              overflow-wrap: anywhere;
+              word-break: break-word;
             }
           }
         </style>
@@ -107,10 +156,8 @@
                 </ul>
                 <div class="d-flex" id="currencydiv">
                     <a style="margin-right:10px;font-weight: 600;text-decoration: none;" href="/users/{{currentuser.id}}/profile"><img class="rounded-5 overflow-hidden me-2" width="32" height="32" src="/Thumbs/Head.ashx?x=48&y=48&userId={{currentuser.id}}" alt="{{currentuser.username}}"/><span>{{currentuser.username}}</span></a>
-                    <a href="/transactions/"><span class="rbx-icon-nav-robux"></span></a>
-                    <span class="">{{currentuser.robux}}</span>
-                    <a href="/transactions/"><span class="rbx-icon-nav-tix"></span></a>
-                    <span>{{currentuser.tix}}</span>
+                    <div class="currency-balance"><a href="/transactions/"><span class="rbx-icon-nav-robux"></span></a><span>{{currentuser.robux}}</span></div>
+                    <div class="currency-balance"><a href="/transactions/"><span class="rbx-icon-nav-tix"></span></a><span>{{currentuser.tix}}</span></div>
 
                     <div class="nav-item dropdown d-flex ms-3">
                         <a class="nav-link" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false" style="height:28px;">
@@ -182,3 +229,4 @@
         {% endif %}
     </body>
 </html>
+```
