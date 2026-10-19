@@ -62,7 +62,7 @@
               display: flex !important;
               flex-flow: row nowrap !important;
               align-items: center;
-              gap: 5px;
+              gap: 10px;
               width: 100%;
               max-width: 100%;
               min-width: 0;
@@ -72,11 +72,12 @@
             #currencydiv > a:first-child {
               display: flex;
               align-items: center;
-              flex: 0 1 auto;
+              flex: 1 1 120px;
               min-width: 0;
-              max-width: 38%;
+              max-width: none;
               margin-right: 0 !important;
               overflow: hidden;
+              gap: 8px;
             }
             #currencydiv > a:first-child img {
               flex: 0 0 32px;
@@ -92,7 +93,7 @@
             #currencydiv .currency-balance {
               display: inline-flex;
               align-items: center;
-              gap: 2px;
+              gap: 4px;
               flex: 0 1 auto;
               min-width: 0;
               white-space: nowrap;
@@ -109,7 +110,7 @@
               display: flex !important;
               flex: 0 0 32px;
               width: 32px;
-              margin-left: auto !important;
+              margin-left: 0 !important;
               justify-content: center;
             }
             #currencydiv > .nav-item.dropdown > a {
@@ -121,23 +122,41 @@
           document.addEventListener("DOMContentLoaded", function () {
             const currencyDiv = document.getElementById("currencydiv");
             if (!currencyDiv) return;
-            const balances = currencyDiv.querySelectorAll(".currency-balance > span:last-child");
-            const compactNumber = function (value) {
+            const balances = Array.from(currencyDiv.querySelectorAll(".currency-balance > span:last-child"));
+            const profileName = currencyDiv.querySelector("> a:first-child span");
+            const settings = currencyDiv.querySelector(":scope > .nav-item.dropdown");
+            const compactNumber = function (value, level) {
               const raw = value.trim().replace(/,/g, "");
-              if (!/^\d+$/.test(raw)) return value;
+              if (!/^\\d+$/.test(raw)) return value;
               const number = Number(raw);
-              if (number >= 1000000000) return (number / 1000000000).toFixed(number >= 10000000000 ? 0 : 1).replace(/\.0$/, "") + "B";
-              if (number >= 1000000) return (number / 1000000).toFixed(number >= 10000000 ? 0 : 1).replace(/\.0$/, "") + "M";
-              if (number >= 100000) return (number / 1000).toFixed(number >= 1000000 ? 0 : 1).replace(/\.0$/, "") + "K";
+              if (level >= 3 && number >= 1000000000) return (number / 1000000000).toFixed(number >= 10000000000 ? 0 : 1).replace(/\\.0$/, "") + "B";
+              if (level >= 2 && number >= 1000000) return (number / 1000000).toFixed(number >= 10000000 ? 0 : 1).replace(/\\.0$/, "") + "M";
+              if (level >= 1 && number >= 1000) return (number / 1000).toFixed(number >= 10000 ? 0 : 1).replace(/\\.0$/, "") + "K";
               return value;
             };
             const updateBalances = function () {
               const isMobile = window.matchMedia("(max-width: 991.98px)").matches;
               balances.forEach(function (balance) {
                 if (!balance.dataset.fullValue) balance.dataset.fullValue = balance.textContent.trim();
-                const fullValue = balance.dataset.fullValue;
-                balance.textContent = isMobile ? compactNumber(fullValue) : fullValue;
+                balance.textContent = balance.dataset.fullValue;
               });
+              if (!isMobile) return;
+              let level = 0;
+              const fits = function () {
+                return currencyDiv.scrollWidth <= currencyDiv.clientWidth + 1;
+              };
+              while (!fits() && level < 3) {
+                level += 1;
+                balances.forEach(function (balance) {
+                  balance.textContent = compactNumber(balance.dataset.fullValue, level);
+                });
+              }
+              if (profileName) {
+                profileName.style.textOverflow = "ellipsis";
+                profileName.style.overflow = "hidden";
+                profileName.style.whiteSpace = "nowrap";
+              }
+              if (settings) settings.style.flexShrink = "0";
             };
             updateBalances();
             window.addEventListener("resize", updateBalances);
