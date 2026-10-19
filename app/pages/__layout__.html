@@ -69,7 +69,7 @@
               max-width: 100%;
               min-width: 0;
               box-sizing: border-box;
-              overflow: hidden;
+              overflow: visible;
             }
             #currencydiv > a:first-child {
               display: flex;
@@ -117,6 +117,9 @@
             #currencydiv > .nav-item.dropdown > a {
               padding: 0 4px;
             }
+          }
+          .dropdown-menu {
+            z-index: 1055;
           }
         </style>
         <script>
