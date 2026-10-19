@@ -61,48 +61,83 @@
             }
             #currencydiv {
               display: flex !important;
-              flex-wrap: wrap;
+              flex-wrap: nowrap;
               align-items: center;
-              gap: 8px 10px;
+              gap: 6px;
               width: 100%;
               min-width: 0;
-              padding: 8px 0 12px;
+              max-width: 100%;
+              overflow: hidden;
             }
             #currencydiv > a:first-child {
               display: flex;
               align-items: center;
-              flex: 1 1 100%;
+              flex: 0 1 auto;
               min-width: 0;
-              margin-right: 0 !important;
+              max-width: 42%;
+              margin-right: 2px !important;
+              overflow: hidden;
             }
             #currencydiv > a:first-child img {
               flex: 0 0 32px;
             }
             #currencydiv > a:first-child span {
+              display: block;
               min-width: 0;
-              overflow-wrap: anywhere;
-              word-break: break-word;
-            }
-            #currencydiv > a:not(:first-child),
-            #currencydiv > span {
-              flex: 0 0 auto;
-            }
-            #currencydiv > .nav-item.dropdown {
-              margin-left: auto !important;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
             }
             #currencydiv .currency-balance {
               display: inline-flex;
               align-items: center;
-              gap: 5px;
+              gap: 3px;
+              flex: 0 1 auto;
               min-width: 0;
-              max-width: 100%;
+              white-space: nowrap;
             }
             #currencydiv .currency-balance span:last-child {
-              overflow-wrap: anywhere;
-              word-break: break-word;
+              display: inline-block;
+              min-width: 0;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+            }
+            #currencydiv > .nav-item.dropdown {
+              flex: 0 0 auto;
+              margin-left: auto !important;
+            }
+            #currencydiv > .nav-item.dropdown > a {
+              padding-left: 4px;
+              padding-right: 4px;
             }
           }
         </style>
+        <script>
+          document.addEventListener("DOMContentLoaded", function () {
+            const currencyDiv = document.getElementById("currencydiv");
+            if (!currencyDiv) return;
+            const balances = currencyDiv.querySelectorAll(".currency-balance span:last-child");
+            const compactNumber = function (value) {
+              const raw = value.trim().replace(/,/g, "");
+              if (!/^\d+$/.test(raw)) return value;
+              const number = Number(raw);
+              if (number >= 1000000000) return (number / 1000000000).toFixed(number >= 10000000000 ? 0 : 1).replace(/\.0$/, "") + "B";
+              if (number >= 1000000) return (number / 1000000).toFixed(number >= 10000000 ? 0 : 1).replace(/\.0$/, "") + "M";
+              if (number >= 100000) return (number / 1000).toFixed(number >= 1000000 ? 0 : 1).replace(/\.0$/, "") + "K";
+              return value;
+            };
+            const updateBalances = function () {
+              balances.forEach(function (balance) {
+                if (!balance.dataset.fullValue) balance.dataset.fullValue = balance.textContent.trim();
+                const fullValue = balance.dataset.fullValue;
+                balance.textContent = window.matchMedia("(max-width: 991.98px)").matches ? compactNumber(fullValue) : fullValue;
+              });
+            };
+            updateBalances();
+            window.addEventListener("resize", updateBalances);
+          });
+        </script>
         <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
         <title>{% block title %}{% endblock %} - Syntax</title>
         <meta name="robots" content="noindex">
