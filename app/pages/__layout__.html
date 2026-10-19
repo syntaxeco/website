@@ -214,10 +214,8 @@
                 </ul>
                 <div class="d-flex" id="currencydiv">
                     <a style="margin-right:10px;font-weight: 600;text-decoration: none;" href="/users/{{currentuser.id}}/profile"><img class="rounded-5 overflow-hidden me-2" width="32" height="32" src="/Thumbs/Head.ashx?x=48&y=48&userId={{currentuser.id}}" alt="{{currentuser.username}}"/><span>{{currentuser.username}}</span></a>
-                    <a href="/transactions/"><span class="rbx-icon-nav-robux"></span></a>
-                    <span class="">{{currentuser.robux}}</span>
-                    <a href="/transactions/"><span class="rbx-icon-nav-tix"></span></a>
-                    <span>{{currentuser.tix}}</span>
+                    <div class="currency-balance"><a href="/transactions/"><span class="rbx-icon-nav-robux"></span></a><span>{{currentuser.robux}}</span></div>
+                    <div class="currency-balance"><a href="/transactions/"><span class="rbx-icon-nav-tix"></span></a><span>{{currentuser.tix}}</span></div>
                     <div class="nav-item dropdown d-flex ms-3">
                         <a class="nav-link" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false" style="height:28px;">
                           <span class="rbx-icon-nav-settings"></span>
