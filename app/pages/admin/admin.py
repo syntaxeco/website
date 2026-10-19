@@ -2534,16 +2534,18 @@ def UpdateAssetFilePost():
 
     from app.util.assetvalidation import ValidateClothingImage, ValidatePlaceFile
     from io import BytesIO
+    from PIL import Image as PILImage
 
     IsRbxmFile = AssetFileContent[:7] == b"<roblox"
 
     if AssetObj.asset_type == AssetType.Face and not IsRbxmFile:
-        FaceFileForValidation = BytesIO(AssetFileContent)
-        FaceFileForValidation.seek(0)
-        FaceImageObj = ValidateClothingImage(FaceFileForValidation, verifyResolution=False, validateFileSize=False, returnImage=True)
-        if FaceImageObj == False or FaceImageObj is None:
+        try:
+            FaceImageObj = PILImage.open(BytesIO(AssetFileContent))
+            FaceImageObj = FaceImageObj.convert("RGBA")
+        except:
             flash("Invalid image, Please make sure it is a PNG file", "error")
             return redirect("/admin/update-asset-file")
+
         if FaceImageObj.size[0] > 1024 or FaceImageObj.size[1] > 1024:
             flash("Image resolution is too large, max 1024 x 1024", "error")
             return redirect("/admin/update-asset-file")
@@ -2559,13 +2561,9 @@ def UpdateAssetFilePost():
         db.session.add(NewImageAsset)
         db.session.commit()
 
-        FaceImageFile = BytesIO()
-        FaceImageObj.save(FaceImageFile, format="PNG")
-        FaceImageFile.seek(0)
-        FaceImageFileContent = FaceImageFile.read()
-        FaceImageFileHash = hashlib.sha512(FaceImageFileContent).hexdigest()
+        FaceImageFileHash = hashlib.sha512(AssetFileContent).hexdigest()
         if not s3helper.DoesKeyExist(FaceImageFileHash):
-            s3helper.UploadBytesToS3(FaceImageFileContent, FaceImageFileHash, contentType="image/png")
+            s3helper.UploadBytesToS3(AssetFileContent, FaceImageFileHash, contentType="image/png")
         assetversion.CreateNewAssetVersion(NewImageAsset, FaceImageFileHash)
 
         FaceTemplateFile = open("./app/files/Face.rbxmx", "r")
@@ -2606,6 +2604,9 @@ def UpdateAssetFilePost():
 
     flash("Asset file updated", "success")
     return redirect("/admin/update-asset-file")
+
+
+
 
 
 @AdminRoute.route("/copy-bundle", methods=['GET'])
