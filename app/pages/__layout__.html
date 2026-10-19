@@ -178,6 +178,11 @@
                   <li class="nav-item">
                     <a class="nav-link active" aria-current="page" href="/develop">Develop</a>
                   </li>
+                  {% if currentuser.is_admin: %}
+                  <li class="nav-item">
+                    <a class="nav-link active" aria-current="page" href="/admin/">Admin{% if currentuser.pending_asset_count > 0: %}<span class="badge text-bg-danger ms-1">{{currentuser.pending_asset_count}}</span>{%endif%}</a>
+                  </li>
+                  {% endif %}
                   <div class="nav-item dropdown d-flexr main-nav-dropdown">
                     <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false" style="height:28px;">
                       Others{% if currentuser.unread_messages > 0 or currentuser.inbound_trades > 0: %} 🔴{%endif%}
@@ -212,9 +217,6 @@
                           <li><a class="dropdown-item" href="/invite-keys">Invite Keys</a></li>
                           <li><a class="dropdown-item" href="/membership">Membership</a></li>
                           <li><a class="dropdown-item" href="/giftcard-redeem">Redeem Codes</a></li>
-                          {% if currentuser.is_admin: %}
-                          <li><a class="dropdown-item" href="/admin/">Admin{% if currentuser.pending_asset_count > 0: %}<span class="badge text-bg-danger ms-1">{{currentuser.pending_asset_count}}</span>{%endif%}</a></li>
-                          {% endif %}
                           <li><hr class="dropdown-divider"></li>
                           <li><form action="/logout" method="post"><input type="hidden" name="csrf_token" value="{{csrf_token()}}"><button class="dropdown-item" style="color:rgb(255, 6, 60);font-weight:600;" type="submit">Logout</button></form></li>
                         </ul>
