@@ -2529,28 +2529,93 @@ def UpdateAssetFilePost():
     AssetFileContent = AssetFile.read()
     AssetFileHash = hashlib.sha512(AssetFileContent).hexdigest()
 
+
+
+
     from app.util.assetvalidation import ValidateClothingImage, ValidatePlaceFile
+    from io import BytesIO
+
+    IsRbxmFile = AssetFileContent[:7] == b"<roblox"
 
     if AssetObj.asset_type == AssetType.Image:
-        isAllowed = ValidateClothingImage( AssetFile, verifyResolution=False)
+        isAllowed = ValidateClothingImage(AssetFile, verifyResolution=False)
         if not isAllowed:
             flash("Invalid image", "error")
             return redirect("/admin/update-asset-file")
+
+    elif AssetObj.asset_type == AssetType.Face and not IsRbxmFile:
+        FaceImageObj = ValidateClothingImage(
+            AssetFile,
+            verifyResolution=False,
+            validateFileSize=False,
+            returnImage=True
+        )
+        if FaceImageObj is False or FaceImageObj is None:
+            flash("Invalid image, Please make sure it is a PNG file", "error")
+            return redirect("/admin/update-asset-file")
+        if FaceImageObj.size[0] > 1024 or FaceImageObj.size[1] > 1024:
+            flash("Image resolution is too large, max 1024 x 1024", "error")
+            return redirect("/admin/update-asset-file")
+
+        FaceImageFile = BytesIO()
+        FaceImageObj.save(FaceImageFile, format="PNG")
+        FaceImageFile.seek(0)
+        FaceImageFileContent = FaceImageFile.read()
+        FaceImageFileHash = hashlib.sha512(FaceImageFileContent).hexdigest()
+
+        if not s3helper.DoesKeyExist(FaceImageFileHash):
+            s3helper.UploadBytesToS3(FaceImageFileContent, FaceImageFileHash, contentType="image/png")
+
+        NewImageAsset = Asset(
+            name="Image",
+            description="",
+            creator_id=1,
+            creator_type=0,
+            asset_type=AssetType.Image,
+            created_at=datetime.utcnow(),
+            moderation_status=0
+        )
+        db.session.add(NewImageAsset)
+        db.session.commit()
+        assetversion.CreateNewAssetVersion(NewImageAsset, FaceImageFileHash)
+
+        FaceTemplateFile = open("./app/files/Face.rbxmx", "r")
+        FaceTemplateFileContent = FaceTemplateFile.read()
+        FaceTemplateFile.close()
+        FaceTemplateFileContent = FaceTemplateFileContent.format(FaceImageId=str(NewImageAsset.id))
+        FaceTemplateFileHash = hashlib.sha512(FaceTemplateFileContent.encode()).hexdigest()
+
+        if not s3helper.DoesKeyExist(FaceTemplateFileHash):
+            s3helper.UploadBytesToS3(FaceTemplateFileContent, FaceTemplateFileHash)
+
+        NewAssetVersion = assetversion.CreateNewAssetVersion(AssetObj, FaceTemplateFileHash)
+        AssetObj.updated_at = datetime.utcnow()
+        db.session.add(AssetModerationLink(ParentAssetId=AssetObj.id, ChildAssetId=NewImageAsset.id))
+        db.session.commit()
+
+        TakeThumbnail(NewImageAsset.id)
+        TakeThumbnail(AssetObj.id)
+        flash("Face asset file updated (PNG → Face Decal)", "success")
+        return redirect("/admin/update-asset-file")
+
     else:
-        isValidPlaceFile = ValidatePlaceFile( AssetFile)
+        isValidPlaceFile = ValidatePlaceFile(AssetFile)
         if type(isValidPlaceFile) is str:
             flash(f"Validation Failed: {isValidPlaceFile}", "error")
             return redirect("/admin/update-asset-file")
-    
+
     if not s3helper.DoesKeyExist(AssetFileHash):
         s3helper.UploadBytesToS3(AssetFileContent, AssetFileHash)
-    
-    NewAssetVersion : AssetVersion = assetversion.CreateNewAssetVersion(AssetObj, AssetFileHash)
+
+    NewAssetVersion = assetversion.CreateNewAssetVersion(AssetObj, AssetFileHash)
     AssetObj.updated_at = datetime.utcnow()
     db.session.commit()
 
     flash("Asset file updated", "success")
     return redirect("/admin/update-asset-file")
+
+
+
 
 @AdminRoute.route("/copy-bundle", methods=['GET'])
 def CopyBundle():
