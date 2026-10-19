@@ -178,11 +178,6 @@
                   <li class="nav-item">
                     <a class="nav-link active" aria-current="page" href="/develop">Develop</a>
                   </li>
-                  {% if currentuser.is_admin: %}
-                  <li class="nav-item">
-                    <a class="nav-link active" aria-current="page" href="/admin/">Admin{% if currentuser.pending_asset_count > 0: %}<span class="badge text-bg-danger ms-1">{{currentuser.pending_asset_count}}</span>{%endif%}</a>
-                  </li>
-                  {% endif %}
                   <div class="nav-item dropdown d-flexr main-nav-dropdown">
                     <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false" style="height:28px;">
                       Others{% if currentuser.unread_messages > 0 or currentuser.inbound_trades > 0: %} 🔴{%endif%}
@@ -236,6 +231,9 @@
             <a href="/download">Downloads</a>
             <!-- <a href="https://synmons.com">Synmons</a> -->
             <a href="https://discord.gg/syntax-eco">Discord</a>
+            {% if currentuser.is_admin: %}
+            <a href="/admin/">Admin{% if currentuser.pending_asset_count > 0: %}<span class="badge text-bg-danger ms-1">{{currentuser.pending_asset_count}}</span>{%endif%}</a>
+            {% endif %}
           </div>
         {% endif %}
         {% if website_wide_message: %}
