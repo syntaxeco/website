@@ -2553,8 +2553,7 @@ def UpdateAssetFilePost():
             creator_id=1,
             creator_type=0,
             asset_type=AssetType.Image,
-            created_at=datetime.utcnow(),
-            moderation_status=0
+            created_at=datetime.utcnow()
         )
         db.session.add(NewImageAsset)
         db.session.commit()
@@ -2568,26 +2567,15 @@ def UpdateAssetFilePost():
             s3helper.UploadBytesToS3(FaceImageFileContent, FaceImageFileHash, contentType="image/png")
         assetversion.CreateNewAssetVersion(NewImageAsset, FaceImageFileHash)
 
-        FaceDecalContent = f'''<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">
-	<Item class="Decal" referent="RBX0">
-		<Properties>
-			<Content name="Texture">
-				<url>http://www.roblox.com/asset/?id={NewImageAsset.id}</url>
-			</Content>
-			<token name="Face">0</token>
-			<string name="Name">face</string>
-			<float name="Shiny">20</float>
-			<float name="Specular">0</float>
-			<float name="Transparency">0</float>
-		</Properties>
-	</Item>
-</roblox>'''
+        FaceTemplateFile = open("./app/files/Face.rbxmx", "r")
+        FaceTemplateFileContent = FaceTemplateFile.read()
+        FaceTemplateFile.close()
+        FaceTemplateFileContent = FaceTemplateFileContent.format(FaceImageId=str(NewImageAsset.id))
+        FaceTemplateFileHash = hashlib.sha512(FaceTemplateFileContent.encode()).hexdigest()
+        if not s3helper.DoesKeyExist(FaceTemplateFileHash):
+            s3helper.UploadBytesToS3(FaceTemplateFileContent, FaceTemplateFileHash)
 
-        FaceDecalHash = hashlib.sha512(FaceDecalContent.encode()).hexdigest()
-        if not s3helper.DoesKeyExist(FaceDecalHash):
-            s3helper.UploadBytesToS3(FaceDecalContent.encode(), FaceDecalHash)
-
-        assetversion.CreateNewAssetVersion(AssetObj, FaceDecalHash)
+        assetversion.CreateNewAssetVersion(AssetObj, FaceTemplateFileHash)
         AssetObj.updated_at = datetime.utcnow()
         db.session.add(AssetModerationLink(ParentAssetId=AssetObj.id, ChildAssetId=NewImageAsset.id))
         db.session.commit()
@@ -2617,7 +2605,6 @@ def UpdateAssetFilePost():
 
     flash("Asset file updated", "success")
     return redirect("/admin/update-asset-file")
-
 
 
 @AdminRoute.route("/copy-bundle", methods=['GET'])
