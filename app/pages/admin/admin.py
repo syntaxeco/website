@@ -2537,13 +2537,8 @@ def UpdateAssetFilePost():
 
     IsRbxmFile = AssetFileContent[:7] == b"<roblox"
 
-    if AssetObj.asset_type == AssetType.Image:
-        isAllowed = ValidateClothingImage(AssetFile, verifyResolution=False)
-        if not isAllowed:
-            flash("Invalid image", "error")
-            return redirect("/admin/update-asset-file")
-
-    elif AssetObj.asset_type == AssetType.Face and not IsRbxmFile:
+    if AssetObj.asset_type == AssetType.Face and not IsRbxmFile:
+        AssetFile.seek(0)
         FaceImageObj = ValidateClothingImage(
             AssetFile,
             verifyResolution=False,
@@ -2557,15 +2552,6 @@ def UpdateAssetFilePost():
             flash("Image resolution is too large, max 1024 x 1024", "error")
             return redirect("/admin/update-asset-file")
 
-        FaceImageFile = BytesIO()
-        FaceImageObj.save(FaceImageFile, format="PNG")
-        FaceImageFile.seek(0)
-        FaceImageFileContent = FaceImageFile.read()
-        FaceImageFileHash = hashlib.sha512(FaceImageFileContent).hexdigest()
-
-        if not s3helper.DoesKeyExist(FaceImageFileHash):
-            s3helper.UploadBytesToS3(FaceImageFileContent, FaceImageFileHash, contentType="image/png")
-
         NewImageAsset = Asset(
             name="Image",
             description="",
@@ -2577,28 +2563,45 @@ def UpdateAssetFilePost():
         )
         db.session.add(NewImageAsset)
         db.session.commit()
+
+        FaceImageFile = BytesIO()
+        FaceImageObj.save(FaceImageFile, format="PNG")
+        FaceImageFile.seek(0)
+        FaceImageFileContent = FaceImageFile.read()
+        FaceImageFileHash = hashlib.sha512(FaceImageFileContent).hexdigest()
+
+        if not s3helper.DoesKeyExist(FaceImageFileHash):
+            s3helper.UploadBytesToS3(FaceImageFileContent, FaceImageFileHash, contentType="image/png")
+
         assetversion.CreateNewAssetVersion(NewImageAsset, FaceImageFileHash)
 
-        FaceTemplateFile = open("./app/files/Face.rbxmx", "r")
-        FaceTemplateFileContent = FaceTemplateFile.read()
-        FaceTemplateFile.close()
+        with open("./app/files/Face.rbxmx", "r") as FaceTemplateFile:
+            FaceTemplateFileContent = FaceTemplateFile.read()
         FaceTemplateFileContent = FaceTemplateFileContent.format(FaceImageId=str(NewImageAsset.id))
         FaceTemplateFileHash = hashlib.sha512(FaceTemplateFileContent.encode()).hexdigest()
 
         if not s3helper.DoesKeyExist(FaceTemplateFileHash):
             s3helper.UploadBytesToS3(FaceTemplateFileContent, FaceTemplateFileHash)
 
-        NewAssetVersion = assetversion.CreateNewAssetVersion(AssetObj, FaceTemplateFileHash)
+        assetversion.CreateNewAssetVersion(AssetObj, FaceTemplateFileHash)
         AssetObj.updated_at = datetime.utcnow()
+
         db.session.add(AssetModerationLink(ParentAssetId=AssetObj.id, ChildAssetId=NewImageAsset.id))
         db.session.commit()
 
         TakeThumbnail(NewImageAsset.id)
         TakeThumbnail(AssetObj.id)
-        flash("Face asset file updated (PNG → Face Decal)", "success")
+
+        flash("Face updated (PNG → Face Decal)", "success")
         return redirect("/admin/update-asset-file")
 
+    if AssetObj.asset_type == AssetType.Image:
+        isAllowed = ValidateClothingImage(AssetFile, verifyResolution=False)
+        if not isAllowed:
+            flash("Invalid image", "error")
+            return redirect("/admin/update-asset-file")
     else:
+        # Hats and all other types must be valid rbxm/rbxmx
         isValidPlaceFile = ValidatePlaceFile(AssetFile)
         if type(isValidPlaceFile) is str:
             flash(f"Validation Failed: {isValidPlaceFile}", "error")
@@ -2607,13 +2610,12 @@ def UpdateAssetFilePost():
     if not s3helper.DoesKeyExist(AssetFileHash):
         s3helper.UploadBytesToS3(AssetFileContent, AssetFileHash)
 
-    NewAssetVersion = assetversion.CreateNewAssetVersion(AssetObj, AssetFileHash)
+    assetversion.CreateNewAssetVersion(AssetObj, AssetFileHash)
     AssetObj.updated_at = datetime.utcnow()
     db.session.commit()
 
     flash("Asset file updated", "success")
     return redirect("/admin/update-asset-file")
-
 
 
 
