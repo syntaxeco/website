@@ -11,6 +11,16 @@
         {% if GroupIdContext != None %}<input type="hidden" name="groupIdContext" value="{{GroupIdContext}}">{%endif%}
         <button type="submit" class="btn btn-success btn-sm w-100">Create T-Shirt</button>
     </form>
+    <div class="linebreak"></div>
+    <p class="m-0 text-secondary mb-2">Or migrate a T-Shirt from Roblox by pasting its link or id</p>
+    <form action="/develop/migrate/2" method="post">
+        <div class="mb-3">
+            <input class="form-control" type="text" id="roblox-link" name="roblox-link" placeholder="https://www.roblox.com/catalog/123456789/T-Shirt-Name" required>
+        </div>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% if GroupIdContext != None %}<input type="hidden" name="groupIdContext" value="{{GroupIdContext}}">{%endif%}
+        <button type="submit" class="btn btn-primary btn-sm w-100">Migrate from Roblox</button>
+    </form>
     <div class="mt-2">
         {% for tshirt in UserClothing: %}
             <div class="w-100 m-1 p-1 d-flex">

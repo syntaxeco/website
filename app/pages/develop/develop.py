@@ -38,6 +38,7 @@ import requests
 import logging
 import hashlib
 import os
+import re
 import random
 import time
 import math
@@ -53,10 +54,241 @@ def CountAlphanumericCharacters( string : str ):
             count += 1
     return count
 
+# --- Roblox classic-clothing migrator ------------------------------------- #
+# Maps a develop page's asset type to the Roblox catalog subcategory, the local
+# rbxmx template used to wrap the downloaded texture, and that template's token.
+_ROBLOX_CLOTHING_TEMPLATES = {
+    11: ("ClassicShirts", "./app/files/Shirt.rbxmx", "ShirtImageId", "Shirt"),
+    12: ("ClassicPants", "./app/files/Pants.rbxmx", "PantsImageId", "Pants"),
+    2:  ("ClassicTShirts", "./app/files/TShirt.rbxmx", "TShirtImageId", "T-Shirt"),
+}
+_CLOTHING_NAME_MAX = 50
+
+
+def _extract_roblox_clothing_image_id( content : bytes ):
+    """Return the texture asset id referenced by a classic clothing rbxmx, or None."""
+    try:
+        text = content.decode("utf-8", "ignore")
+    except Exception:
+        return None
+    # Classic clothing urls look like .../asset/?id=123 or .../asset/?version=1&amp;id=123
+    match = re.search(r"<url>[^<]*?id=(\d+)</url>", text)
+    if match is None:
+        return None
+    return int(match.group(1))
+
+
+def _resolve_roblox_asset_id( raw ):
+    """Accept a bare asset id or a full Roblox catalog/library url."""
+    if not raw:
+        return None
+    match = re.search(r"(\d{3,})", str(raw).strip())
+    if match is None:
+        return None
+    return int(match.group(1))
+
+
+def _download_roblox_asset( assetid : int ):
+    """Download raw asset content from Roblox asset delivery (with proxy fallback)."""
+    session = requests.Session()
+    session.headers.update({
+        "User-Agent": "Roblox/WinInet",
+        "Accept": "*/*",
+        "Roblox-Browser-Asset-Request": "false",
+        "Roblox-Place-Id": "1818",
+    })
+    roblosecurity = getattr(config, "ASSETMIGRATOR_ROBLOSECURITY", None)
+    if roblosecurity:
+        session.cookies.update({".ROBLOSECURITY": roblosecurity})
+    for host in ("assetdelivery.roblox.com", "assetdelivery.roproxy.com"):
+        try:
+            resp = session.get(f"https://{host}/v1/asset/?id={str(assetid)}", timeout=20, allow_redirects=True)
+            if resp.status_code == 200 and resp.content:
+                return resp.content
+        except Exception as e:
+            logging.warning(f"Failed to download roblox asset {assetid} from {host}: {str(e)}")
+    return None
+
+
+def _migrate_roblox_clothing( asset_type : int, roblox_asset_id : int, target_creator, creator_type : int, uploaded_by : User ):
+    """Pull a Roblox classic clothing item and create a pending Syntax asset.
+
+    Returns (asset, error_message). On failure asset is None.
+    """
+    subcategory, template_path, template_token, default_name = _ROBLOX_CLOTHING_TEMPLATES[asset_type]
+
+    from app.routes.asset import GetOriginalAssetInfo, RatelimittedReachedException, AssetNotFoundException, AssetNotAllowedException
+
+    try:
+        asset_info = GetOriginalAssetInfo(roblox_asset_id, throwException=True)
+    except RatelimittedReachedException:
+        return None, "Roblox is rate limiting us right now, please try again later"
+    except AssetNotFoundException:
+        return None, "That Roblox item could not be found"
+    except AssetNotAllowedException:
+        return None, "That Roblox item is not available for migration"
+    except Exception as e:
+        logging.warning(f"Failed to fetch roblox asset info {roblox_asset_id}: {str(e)}")
+        return None, "Failed to look up that Roblox item"
+
+    if asset_info is None:
+        return None, "Failed to look up that Roblox item"
+
+    expected_type = {11: AssetType.Shirt.value, 12: AssetType.Pants.value, 2: AssetType.TShirt.value}[asset_type]
+    if asset_info.get("AssetTypeId") != expected_type:
+        return None, "That Roblox item is not the right asset type for this page"
+
+    ItemName = FilterText(str(asset_info.get("Name") or default_name).strip())[:_CLOTHING_NAME_MAX] or default_name
+    ItemDescription = FilterText(str(asset_info.get("Description") or "Migrated from Roblox"))[:200]
+
+    clothing_content = _download_roblox_asset(roblox_asset_id)
+    if clothing_content is None:
+        return None, "Failed to download that Roblox item"
+
+    image_asset_id = _extract_roblox_clothing_image_id(clothing_content)
+    if image_asset_id is None:
+        return None, "That Roblox item has no texture to migrate"
+
+    texture_content = _download_roblox_asset(image_asset_id)
+    if texture_content is None:
+        return None, "Failed to download the item texture"
+
+    from PIL import Image as _PILImage
+    try:
+        _img = _PILImage.open(BytesIO(texture_content))
+        _img.verify()
+        _img = _PILImage.open(BytesIO(texture_content)).convert("RGBA")
+        # Shirts/pants are 585 x 559; t-shirt graphics vary (usually 512 x 512).
+        expected_size = {11: (585, 559), 12: (585, 559), 2: None}[asset_type]
+        if expected_size is not None and _img.size != expected_size:
+            return None, f"That Roblox item's texture is not the standard {expected_size[0]} x {expected_size[1]} size"
+        if _img.size[0] > 2048 or _img.size[1] > 2048:
+            return None, "That Roblox item's texture is too large"
+    except Exception:
+        return None, "The item texture is not a valid image"
+
+    TextureFile = BytesIO()
+    _img.save(TextureFile, format="PNG")
+    TextureFile.seek(0)
+    TextureContent = TextureFile.read()
+    TextureHash = hashlib.sha512(TextureContent).hexdigest()
+    if not s3helper.DoesKeyExist(TextureHash):
+        s3helper.UploadBytesToS3(TextureContent, TextureHash, contentType="image/png")
+
+    NewImageAsset : Asset = Asset(
+        name = "Image",
+        description = "",
+        creator_id = target_creator.id,
+        creator_type = creator_type,
+        asset_type = AssetType.Image,
+        created_at = datetime.utcnow()
+    )
+    db.session.add(NewImageAsset)
+    db.session.commit()
+
+    NewImageAssetVersion : AssetVersion = CreateNewAssetVersion(NewImageAsset, TextureHash, UploadedBy = uploaded_by)
+    if NewImageAssetVersion is None:
+        db.session.delete(NewImageAsset)
+        db.session.commit()
+        return None, "Failed to create the migrated image"
+
+    TakeThumbnail( AssetId = NewImageAsset.id, isIcon = False )
+
+    TemplateFile = open(template_path, "r")
+    TemplateContent = TemplateFile.read()
+    TemplateFile.close()
+    TemplateContent = TemplateContent.format(**{template_token: str(NewImageAsset.id)})
+    TemplateHash = hashlib.sha512(TemplateContent.encode()).hexdigest()
+    if not s3helper.DoesKeyExist(TemplateHash):
+        s3helper.UploadBytesToS3(TemplateContent, TemplateHash)
+
+    NewAsset : Asset = Asset(
+        name = ItemName,
+        description = ItemDescription,
+        creator_id = target_creator.id,
+        creator_type = creator_type,
+        asset_type = AssetType(asset_type),
+        created_at = datetime.utcnow(),
+        updated_at = datetime.utcnow(),
+        moderation_status = 1,
+        asset_genre = 1
+    )
+    db.session.add(NewAsset)
+    db.session.commit()
+
+    NewAssetVersion : AssetVersion = CreateNewAssetVersion(NewAsset, TemplateHash, UploadedBy = uploaded_by)
+    if NewAssetVersion is None:
+        db.session.delete(NewAsset)
+        db.session.commit()
+        return None, "Failed to create the migrated asset"
+
+    db.session.add(AssetModerationLink(ParentAssetId = NewAsset.id, ChildAssetId = NewImageAsset.id))
+    db.session.add(UserAsset(userid = uploaded_by.id, assetid = NewAsset.id))
+    db.session.commit()
+
+    TakeThumbnail( AssetId = NewAsset.id )
+    return NewAsset, None
+
 @DevelopPagesRoute.errorhandler( 429 )
 def handle_ratelimit_reached(e):
     flash("You are being rate limited, please try again later", "error")
     return redirect(request.referrer)
+
+@DevelopPagesRoute.route('/develop/migrate/<int:ReqAssetType>', methods=['POST'])
+@auth.authenticated_required
+@limiter.limit("10/minute")
+@user_limiter.limit("10/minute")
+def migrate_roblox_clothing(ReqAssetType):
+    if ReqAssetType not in _ROBLOX_CLOTHING_TEMPLATES:
+        flash("Invalid asset type", "error")
+        return redirect(url_for("DevelopPagesRoute.develop"))
+    if not websiteFeatures.GetWebsiteFeature("AssetCreation"):
+        flash("Asset creation is temporarily disabled", "error")
+        return redirect(url_for("DevelopPagesRoute.develop"))
+
+    AuthenticatedUser : User = auth.GetCurrentUser()
+    TargetCreatorObj : User | Group = AuthenticatedUser
+    CreatorType = 0
+
+    groupIdContext = request.form.get(key = "groupIdContext", default = None, type = int)
+    if groupIdContext is not None and groupIdContext > 0:
+        GroupContext : Group = Group.query.filter_by(id=groupIdContext).first()
+        if GroupContext is None:
+            return abort(404)
+        ViewerGroupRole : GroupRole | None = groups.GetUserRolesetInGroup( AuthenticatedUser, GroupContext )
+        if ViewerGroupRole is None:
+            return abort(403)
+        ViewerRolePermissions : GroupRolePermission = groups.GetRolesetPermission( ViewerGroupRole )
+        if not ViewerRolePermissions.manage_items:
+            return abort(403)
+        if not ViewerRolePermissions.create_items:
+            flash("You do not have permission to create assets in this group", "error")
+            return redirect(url_for("DevelopPagesRoute.develop", groupId=groupIdContext, type=ReqAssetType))
+
+        TargetCreatorObj = GroupContext
+        CreatorType = 1
+
+    CreateLockName = f"createasset_{TargetCreatorObj.id}"
+    CreateLock = redislock.acquire_lock(CreateLockName, acquire_timeout=10, lock_timeout=1)
+    if CreateLock is None:
+        flash("You are creating too many assets at once", "error")
+        return redirect(url_for("DevelopPagesRoute.develop"))
+
+    RobloxAssetId = _resolve_roblox_asset_id(request.form.get("roblox-link", default = None, type = str))
+    if RobloxAssetId is None:
+        redislock.release_lock(CreateLockName, CreateLock)
+        flash("Please enter a valid Roblox item link or id", "error")
+        return redirect(url_for("DevelopPagesRoute.develop", groupId=groupIdContext, type=ReqAssetType))
+
+    NewAsset, ErrorMessage = _migrate_roblox_clothing(ReqAssetType, RobloxAssetId, TargetCreatorObj, CreatorType, AuthenticatedUser)
+    redislock.release_lock(CreateLockName, CreateLock)
+    if NewAsset is None:
+        flash(ErrorMessage or "Failed to migrate that Roblox item", "error")
+        return redirect(url_for("DevelopPagesRoute.develop", groupId=groupIdContext, type=ReqAssetType))
+
+    flash("Item migrated and submitted for moderation", "success")
+    return redirect(url_for("DevelopPagesRoute.develop", groupId=groupIdContext, type=ReqAssetType))
+
 
 @DevelopPagesRoute.route('/develop')
 @auth.authenticated_required
