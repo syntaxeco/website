@@ -438,6 +438,16 @@ def asset_copier_post():
 def IsItemInReleasePool( AssetId : int ) -> bool:
     return redis_controller.lrange("ItemReleasePool:Items", 0, -1).count(str(AssetId)) > 0
 def GetNextItemDropDateTime() -> datetime:
+    # (1) Runtime one-off override set from the admin Item Release Schedule page.
+    #     An absolute time or a countdown both land here as a unix timestamp; it wins
+    #     over everything and is deleted by the releaser once the drop has fired.
+    OverrideTs = redis_controller.get("ItemReleasePool:NextDropOverride")
+    if OverrideTs is not None:
+        try:
+            return datetime.utcfromtimestamp(int(OverrideTs))
+        except Exception as e:
+            logging.warn(f"Admin > GetNextItemDropDateTime: bad NextDropOverride {OverrideTs!r}: {str(e)}")
+
     LastItemDropTimestamp : str | None = redis_controller.get("ItemReleasePool:LastDropTimestamp")
     if LastItemDropTimestamp is None:
         LastItemDropTimestamp = round(time.time())
@@ -447,6 +457,16 @@ def GetNextItemDropDateTime() -> datetime:
         except Exception as e:
             logging.warn(f"Admin > GetNextItemDropDateTime: Exception raised while trying to convert to integer, {str(e)}")
             LastItemDropTimestamp = round(time.time())
+
+    # (2) Runtime fixed cadence: drop every N seconds after the last drop.
+    IntervalSeconds = redis_controller.get("ItemReleasePool:IntervalSeconds")
+    if IntervalSeconds is not None:
+        try:
+            return datetime.utcfromtimestamp(LastItemDropTimestamp + int(IntervalSeconds))
+        except Exception as e:
+            logging.warn(f"Admin > GetNextItemDropDateTime: bad IntervalSeconds {IntervalSeconds!r}: {str(e)}")
+
+    # (3) Default (unchanged): random 6-20h after the last drop.
     RandomSeed = f"{LastItemDropTimestamp}-{config.FLASK_SESSION_KEY}"
     random.seed( RandomSeed )
     NextDropDatetime = datetime.utcfromtimestamp( LastItemDropTimestamp + random.randint( 60 * 60 * 6, 60 * 60 * 20 ) )
