@@ -194,6 +194,7 @@ def item_release_pool_releaser():
         db.session.commit()
         logging.info(f"Released Item {AssetObj.id}")
         redis_controller.set("ItemReleasePool:LastDropTimestamp", value = str(round(time.time())))
+        redis_controller.delete("ItemReleasePool:NextDropOverride")
 
         try:
             requests.post(
