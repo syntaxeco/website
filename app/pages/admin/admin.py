@@ -1035,6 +1035,77 @@ def ReRenderAsset(assetid):
     flash("Asset queued for rerendering", "success")
     return redirect(f"/admin/manage-assets/{str(AssetObj.id)}")
 
+@AdminRoute.route("/manage-assets/<int:assetid>/open-gift", methods=['POST'])
+@limiter.limit("10/minute")
+def OpenGiftAsset( assetid : int ):
+    AdminPermissionRequired('ManageAsset')
+    AuthenticatedUser : User = auth.GetCurrentUser()
+
+    GiftAssetObj : Asset = Asset.query.filter_by(id=assetid).first()
+    if GiftAssetObj is None:
+        flash("Gift asset does not exist", "danger")
+        return redirect("/admin/manage-assets")
+
+    if GiftAssetObj.name.startswith("Opened "):
+        flash("This gift has already been opened", "danger")
+        return redirect(f"/admin/manage-assets/{str(GiftAssetObj.id)}")
+
+    RewardAssetId = request.form.get( key='reward_assetid', default=None, type=int )
+    if RewardAssetId is None:
+        flash("Enter a reward asset ID", "danger")
+        return redirect(f"/admin/manage-assets/{str(GiftAssetObj.id)}")
+    if RewardAssetId == GiftAssetObj.id:
+        flash("The reward cannot be the gift itself", "danger")
+        return redirect(f"/admin/manage-assets/{str(GiftAssetObj.id)}")
+
+    from app.models.userassets import UserAsset
+
+    RewardAssetObj : Asset = Asset.query.filter_by(id=RewardAssetId).first()
+    if RewardAssetObj is None:
+        flash("Reward asset does not exist", "danger")
+        return redirect(f"/admin/manage-assets/{str(GiftAssetObj.id)}")
+    if RewardAssetObj.is_limited or RewardAssetObj.is_limited_unique:
+        flash("Limited items cannot be used as a gift reward", "danger")
+        return redirect(f"/admin/manage-assets/{str(GiftAssetObj.id)}")
+
+    OwnerRows = UserAsset.query.filter_by(assetid=GiftAssetObj.id).all()
+    OwnerUserIds = list({ Row.userid for Row in OwnerRows })
+
+    AlreadyOwnRows = UserAsset.query.filter_by(assetid=RewardAssetObj.id).all()
+    AlreadyOwnIds = { Row.userid for Row in AlreadyOwnRows }
+
+    GrantedCount = 0
+    for Uid in OwnerUserIds:
+        if Uid in AlreadyOwnIds:
+            continue
+        db.session.add( UserAsset(userid=Uid, assetid=RewardAssetObj.id) )
+        GrantedCount += 1
+
+    RewardName = RewardAssetObj.name
+    GiftAssetObj.name = "Opened " + GiftAssetObj.name
+    GiftAssetObj.updated_at = datetime.utcnow()
+    db.session.commit()
+
+    try:
+        from app.util import adminlog
+        adminlog.SendAdminLog(
+            title="Gift Opened",
+            description=f"**{AuthenticatedUser.username}** ({AuthenticatedUser.id}) opened a gift",
+            actor=AuthenticatedUser,
+            fields=[
+                {"name": "Gift", "value": f"{GiftAssetObj.name} ({GiftAssetObj.id})", "inline": True},
+                {"name": "Reward", "value": f"{RewardName} ({RewardAssetObj.id})", "inline": True},
+                {"name": "Owners", "value": str(len(OwnerUserIds)), "inline": True},
+                {"name": "Newly rewarded", "value": str(GrantedCount), "inline": True},
+            ],
+            color=0x9B59B6,
+        )
+    except Exception:
+        pass
+
+    flash(f"Opened gift: rewarded {GrantedCount} of {len(OwnerUserIds)} owners with {RewardName} (others already owned it). Gift renamed.", "success")
+    return redirect(f"/admin/manage-assets/{str(GiftAssetObj.id)}")
+
 @AdminRoute.route("/pending-assets", methods=['GET'])
 def PendingAssets():
     AdminPermissionRequired('AssetModeration')
