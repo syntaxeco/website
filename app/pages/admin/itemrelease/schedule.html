@@ -1,0 +1,166 @@
+{% extends '__layout__.html' %}
+{% block title %}Admin{% endblock %}
+{% block head %}
+<link href="/static/css/admin.css" rel="stylesheet"/> <!-- Its just easier to resuse this-->
+<style>
+    .bg-dark { background-color: rgb(32, 32, 32) !important; box-shadow: 0px 0px 5px 0px rgb(0,0,0); }
+    .ir-card { background-color: rgb(32,32,32); border-radius: 8px; padding: 16px; margin-bottom: 16px; box-shadow: 0px 0px 5px 0px rgb(0,0,0); }
+    .ir-label { font-size: 12px; color: #9aa0a6; }
+    .ir-big { font-size: 20px; font-weight: 600; }
+    .ir-quick { gap: 6px; }
+    .ir-quick .btn { min-width: 64px; }
+    .ir-pill { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; }
+    .ir-on { background:#1e5631; color:#d8ffe0; }
+    .ir-off { background:#4a3b12; color:#ffe9b0; }
+</style>
+{% endblock %}
+{% block content %}
+<div id="main">
+    <div class="container" style="max-width: 820px;">
+        <a class="mb-2" href="/admin"> < Return to Admin</a>
+        <h1 class="m-0 text-secondary">Item Release <span class="text-white">Schedule</span></h1>
+        <p class="text-secondary m-0" style="font-size: 12px;">Control when the next catalog item drops from the release pool. Changes apply within ~1 minute &mdash; no restart needed.</p>
+
+        {% with messages = get_flashed_messages() %}
+        {% if messages %}
+        <div class="mt-2">
+        {% for message in messages %}
+            <div class="alert border border-secondary p-2 text-center messagealerts">{{ message }}</div>
+        {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        <div class="linebreak"></div>
+
+        <!-- STATUS -->
+        <div class="ir-card">
+            <div class="row">
+                <div class="col-6">
+                    <div class="ir-label">NEXT DROP (your local time)</div>
+                    <div class="ir-big text-white" id="next-local">&mdash;</div>
+                    <div class="ir-label" id="next-countdown">calculating&hellip;</div>
+                </div>
+                <div class="col-6">
+                    <div class="ir-label">NEXT DROP (UTC)</div>
+                    <div class="ir-big text-white">{{ NextDropIso }}</div>
+                    <div class="ir-label">Server now (UTC): {{ ServerUtcIso }}</div>
+                </div>
+            </div>
+            <hr class="my-2" style="border-color:#444;">
+            <div class="ir-label">
+                Mode:
+                {% if OverrideActive %}
+                    <span class="ir-pill ir-on">One-off override &rarr; {{ OverrideIso }} UTC</span>
+                {% elif IntervalMinutes %}
+                    <span class="ir-pill ir-on">Repeating every {{ IntervalMinutes }} min</span>
+                {% else %}
+                    <span class="ir-pill ir-off">Default (random 6&ndash;20h after each drop)</span>
+                {% endif %}
+                &nbsp; Items waiting in pool: <span class="text-white">{{ PoolCount }}</span>
+            </div>
+            {% if PoolItems %}
+            <div class="ir-label mt-1">
+                {% for it in PoolItems %}<span class="text-secondary">{{ it.name }} ({{ it.id }})</span>{% if not loop.last %} &middot; {% endif %}{% endfor %}
+            </div>
+            {% endif %}
+            {% if PoolCount == 0 %}
+            <div class="ir-label mt-1" style="color:#ffb3b3;">Pool is empty &mdash; nothing will drop until you add an item to the release pool.</div>
+            {% endif %}
+        </div>
+
+        <!-- COUNTDOWN -->
+        <div class="ir-card">
+            <div class="ir-label mb-1">DROP IN&hellip; (countdown from now)</div>
+            <div class="d-flex ir-quick flex-wrap">
+                <form method="post" class="d-inline"><input type="hidden" name="csrf_token" value="{{csrf_token()}}"><input type="hidden" name="mode" value="countdown"><input type="hidden" name="minutes" value="5"><button class="btn btn-outline-light btn-sm" type="submit">5 min</button></form>
+                <form method="post" class="d-inline"><input type="hidden" name="csrf_token" value="{{csrf_token()}}"><input type="hidden" name="mode" value="countdown"><input type="hidden" name="minutes" value="20"><button class="btn btn-outline-light btn-sm" type="submit">20 min</button></form>
+                <form method="post" class="d-inline"><input type="hidden" name="csrf_token" value="{{csrf_token()}}"><input type="hidden" name="mode" value="countdown"><input type="hidden" name="minutes" value="60"><button class="btn btn-outline-light btn-sm" type="submit">1 hour</button></form>
+                <form method="post" class="d-inline"><input type="hidden" name="csrf_token" value="{{csrf_token()}}"><input type="hidden" name="mode" value="countdown"><input type="hidden" name="minutes" value="360"><button class="btn btn-outline-light btn-sm" type="submit">6 hours</button></form>
+            </div>
+            <form method="post" class="d-flex mt-2" style="gap:8px;">
+                <input type="hidden" name="csrf_token" value="{{csrf_token()}}">
+                <input type="hidden" name="mode" value="countdown">
+                <input type="number" step="any" min="0" class="form-control form-control-sm" name="minutes" placeholder="custom minutes from now" required>
+                <button class="btn btn-success btn-sm" type="submit">Set</button>
+            </form>
+        </div>
+
+        <!-- EXACT TIME -->
+        <div class="ir-card">
+            <div class="ir-label mb-1">EXACT TIME (entered in your local time, stored as UTC)</div>
+            <form method="post" class="d-flex" style="gap:8px;">
+                <input type="hidden" name="csrf_token" value="{{csrf_token()}}">
+                <input type="hidden" name="mode" value="absolute">
+                <input type="hidden" name="tzoffset" id="tzoffset" value="0">
+                <input type="datetime-local" class="form-control form-control-sm" name="datetime_local" id="datetime_local" required>
+                <button class="btn btn-success btn-sm" type="submit">Set</button>
+            </form>
+        </div>
+
+        <!-- REPEATING -->
+        <div class="ir-card">
+            <div class="ir-label mb-1">REPEAT EVERY&hellip; (keeps dropping on a fixed cadence)</div>
+            <div class="d-flex ir-quick flex-wrap">
+                <form method="post" class="d-inline"><input type="hidden" name="csrf_token" value="{{csrf_token()}}"><input type="hidden" name="mode" value="interval"><input type="hidden" name="interval_minutes" value="720"><button class="btn btn-outline-light btn-sm" type="submit">12h</button></form>
+                <form method="post" class="d-inline"><input type="hidden" name="csrf_token" value="{{csrf_token()}}"><input type="hidden" name="mode" value="interval"><input type="hidden" name="interval_minutes" value="1440"><button class="btn btn-outline-light btn-sm" type="submit">24h</button></form>
+                <form method="post" class="d-inline"><input type="hidden" name="csrf_token" value="{{csrf_token()}}"><input type="hidden" name="mode" value="interval"><input type="hidden" name="interval_minutes" value="2880"><button class="btn btn-outline-light btn-sm" type="submit">48h</button></form>
+            </div>
+            <form method="post" class="d-flex mt-2" style="gap:8px;">
+                <input type="hidden" name="csrf_token" value="{{csrf_token()}}">
+                <input type="hidden" name="mode" value="interval">
+                <input type="number" step="any" min="0" class="form-control form-control-sm" name="interval_minutes" placeholder="custom interval in minutes" required>
+                <button class="btn btn-success btn-sm" type="submit">Set interval</button>
+            </form>
+            <div class="ir-label mt-1">Interval counts from the last drop. A one-off override (countdown/exact) always takes priority over the interval for the very next drop.</div>
+        </div>
+
+        <!-- ACTIONS -->
+        <div class="ir-card">
+            <div class="d-flex ir-quick flex-wrap">
+                <form method="post" class="d-inline"><input type="hidden" name="csrf_token" value="{{csrf_token()}}"><input type="hidden" name="mode" value="dropnow"><button class="btn btn-warning btn-sm" type="submit"><i class="bi bi-lightning-charge"></i> Drop now</button></form>
+                <form method="post" class="d-inline"><input type="hidden" name="csrf_token" value="{{csrf_token()}}"><input type="hidden" name="mode" value="clear"><button class="btn btn-outline-secondary btn-sm" type="submit">Clear one-off override</button></form>
+                <form method="post" class="d-inline"><input type="hidden" name="csrf_token" value="{{csrf_token()}}"><input type="hidden" name="mode" value="reset"><button class="btn btn-outline-danger btn-sm" type="submit">Reset to default (random 6&ndash;20h)</button></form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function(){
+    // tz offset: minutes to ADD to local to get UTC (server uses UTC = local + offset)
+    var off = new Date().getTimezoneOffset();
+    var tz = document.getElementById('tzoffset');
+    if (tz) tz.value = off;
+
+    // prefill the exact-time picker with the current next-drop in local time
+    var nextUnix = {{ NextDropUnix }};
+    var target = new Date(nextUnix * 1000);
+    function pad(n){ return (n<10?'0':'')+n; }
+    var dtl = document.getElementById('datetime_local');
+    if (dtl) {
+        dtl.value = target.getFullYear()+'-'+pad(target.getMonth()+1)+'-'+pad(target.getDate())
+                  +'T'+pad(target.getHours())+':'+pad(target.getMinutes());
+    }
+
+    // show next drop in local time + live countdown
+    var localEl = document.getElementById('next-local');
+    if (localEl) localEl.textContent = target.toLocaleString();
+
+    var cdEl = document.getElementById('next-countdown');
+    function tick(){
+        if (!cdEl) return;
+        var diff = Math.floor((target.getTime() - Date.now())/1000);
+        if (diff <= 0){ cdEl.textContent = 'due now (drops on next check)'; return; }
+        var d = Math.floor(diff/86400); diff -= d*86400;
+        var h = Math.floor(diff/3600);  diff -= h*3600;
+        var m = Math.floor(diff/60);    var s = diff - m*60;
+        var parts = [];
+        if (d) parts.push(d+'d');
+        parts.push(pad(h)+'h', pad(m)+'m', pad(s)+'s');
+        cdEl.textContent = 'in ' + parts.join(' ');
+    }
+    tick(); setInterval(tick, 1000);
+})();
+</script>
+{% endblock %}
