@@ -472,6 +472,138 @@ def GetNextItemDropDateTime() -> datetime:
     NextDropDatetime = datetime.utcfromtimestamp( LastItemDropTimestamp + random.randint( 60 * 60 * 6, 60 * 60 * 20 ) )
     return NextDropDatetime
 
+@AdminRoute.route("/item-releases/schedule", methods=["GET"])
+def ItemReleaseSchedule():
+    AdminPermissionRequired('ManageItemReleases')
+
+    NowUtc = datetime.utcnow()
+    NextDrop = GetNextItemDropDateTime()
+    Epoch = datetime(1970, 1, 1)
+
+    OverrideTs = redis_controller.get("ItemReleasePool:NextDropOverride")
+    OverrideDt = None
+    if OverrideTs is not None:
+        try:
+            OverrideDt = datetime.utcfromtimestamp(int(OverrideTs))
+        except Exception:
+            OverrideDt = None
+
+    IntervalSecondsRaw = redis_controller.get("ItemReleasePool:IntervalSeconds")
+    IntervalMinutes = None
+    if IntervalSecondsRaw is not None:
+        try:
+            IntervalMinutes = round(int(IntervalSecondsRaw) / 60, 2)
+        except Exception:
+            IntervalMinutes = None
+
+    PoolIds = redis_controller.lrange("ItemReleasePool:Items", 0, -1)
+    PoolItems = []
+    for Pid in PoolIds:
+        PidStr = Pid.decode() if isinstance(Pid, (bytes, bytearray)) else str(Pid)
+        ItemName = PidStr
+        Meta = redis_controller.get(f"ItemReleasePool:Item_Metadata:{PidStr}")
+        if Meta is not None:
+            try:
+                ItemName = json.loads(Meta).get("Name", PidStr)
+            except Exception:
+                pass
+        PoolItems.append({"id": PidStr, "name": ItemName})
+
+    return render_template(
+        "admin/itemrelease/schedule.html",
+        ServerUtcIso = NowUtc.strftime("%Y-%m-%d %H:%M:%S"),
+        NextDropIso = NextDrop.strftime("%Y-%m-%d %H:%M:%S"),
+        NextDropUnix = int((NextDrop - Epoch).total_seconds()),
+        OverrideActive = OverrideDt is not None,
+        OverrideIso = None if OverrideDt is None else OverrideDt.strftime("%Y-%m-%d %H:%M:%S"),
+        IntervalMinutes = IntervalMinutes,
+        PoolItems = PoolItems,
+        PoolCount = len(PoolItems),
+    )
+
+@AdminRoute.route("/item-releases/schedule", methods=["POST"])
+@limiter.limit("60/minute")
+def ItemReleaseSchedulePost():
+    AdminPermissionRequired('ManageItemReleases')
+    AuthenticatedUser = auth.GetCurrentUser()
+    Epoch = datetime(1970, 1, 1)
+
+    Mode = request.form.get(key="mode", default="", type=str)
+    LogDesc = None
+    LogFields = None
+
+    if Mode == "absolute":
+        DtLocal = request.form.get(key="datetime_local", default=None, type=str)
+        TzOffset = request.form.get(key="tzoffset", default=0, type=int)  # minutes: UTC = local + offset
+        if not DtLocal:
+            flash("Pick a date and time", "danger")
+            return redirect("/admin/item-releases/schedule")
+        Naive = None
+        for Fmt in ("%Y-%m-%dT%H:%M", "%Y-%m-%dT%H:%M:%S"):
+            try:
+                Naive = datetime.strptime(DtLocal, Fmt); break
+            except Exception:
+                continue
+        if Naive is None:
+            flash("Could not read that date/time", "danger")
+            return redirect("/admin/item-releases/schedule")
+        Utc = Naive + timedelta(minutes=TzOffset)
+        redis_controller.set("ItemReleasePool:NextDropOverride", str(int((Utc - Epoch).total_seconds())))
+        LogDesc = f"set the next item drop to **{Utc.strftime('%Y-%m-%d %H:%M')} UTC**"
+        LogFields = [{"name": "Next drop (UTC)", "value": Utc.strftime('%Y-%m-%d %H:%M'), "inline": True}]
+
+    elif Mode == "countdown":
+        Minutes = request.form.get(key="minutes", default=None, type=float)
+        if Minutes is None or Minutes < 0:
+            flash("Enter a valid number of minutes", "danger")
+            return redirect("/admin/item-releases/schedule")
+        Utc = datetime.utcnow() + timedelta(minutes=Minutes)
+        redis_controller.set("ItemReleasePool:NextDropOverride", str(int((Utc - Epoch).total_seconds())))
+        LogDesc = f"scheduled the next item drop for **{Minutes:g} min from now** ({Utc.strftime('%Y-%m-%d %H:%M')} UTC)"
+        LogFields = [{"name": "Next drop (UTC)", "value": Utc.strftime('%Y-%m-%d %H:%M'), "inline": True}]
+
+    elif Mode == "dropnow":
+        Utc = datetime.utcnow()
+        redis_controller.set("ItemReleasePool:NextDropOverride", str(int((Utc - Epoch).total_seconds())))
+        LogDesc = "triggered an **immediate** item drop"
+
+    elif Mode == "interval":
+        IntervalMin = request.form.get(key="interval_minutes", default=None, type=float)
+        if IntervalMin is None or IntervalMin <= 0:
+            flash("Enter a valid interval in minutes", "danger")
+            return redirect("/admin/item-releases/schedule")
+        redis_controller.set("ItemReleasePool:IntervalSeconds", str(int(IntervalMin * 60)))
+        redis_controller.delete("ItemReleasePool:NextDropOverride")
+        LogDesc = f"set item drops to repeat **every {IntervalMin:g} min**"
+
+    elif Mode == "clear":
+        redis_controller.delete("ItemReleasePool:NextDropOverride")
+        LogDesc = "cleared the one-off next-drop override"
+
+    elif Mode == "reset":
+        redis_controller.delete("ItemReleasePool:NextDropOverride")
+        redis_controller.delete("ItemReleasePool:IntervalSeconds")
+        LogDesc = "reset item drops to the default random 6-20h schedule"
+
+    else:
+        flash("Unknown action", "danger")
+        return redirect("/admin/item-releases/schedule")
+
+    try:
+        from app.util import adminlog
+        adminlog.SendAdminLog(
+            title="Item Release Schedule Changed",
+            description=f"**{AuthenticatedUser.username}** ({AuthenticatedUser.id}) {LogDesc}",
+            actor=AuthenticatedUser,
+            fields=LogFields,
+            color=0xE67E22,
+        )
+    except Exception:
+        pass
+
+    flash("Item release schedule updated", "success")
+    return redirect("/admin/item-releases/schedule")
+
 def InsertItemIntoItemReleasePool( AssetObj : Asset, Name : str, Description : str, RobuxPrice : int = 0, TicketsPrice : int = 0, IsLimited : bool = False, IsLimitedUnique : bool = False, SerialCount : int | None = None, OffsaleAfter : timedelta | None = None ):
     if IsItemInReleasePool( AssetObj.id ):
         raise Exception("InsertItemIntoItemReleasePool: Attempted to insert item which is already inside item release pool")
