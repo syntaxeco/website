@@ -3,7 +3,10 @@
     <p class="m-0 text-secondary mb-2">Want to create Shirts? <a class="text-decoration-none" href="/static/img/TemplateShirt.png">Download</a> the template</p>
     <form action="/develop/create/11" method="post" enctype="multipart/form-data">
         <div class="mb-3">
-            <input class="form-control" type="file" id="file" name="file" required>
+            <input class="form-control" type="file" id="file" name="file">
+        </div>
+        <div class="mb-3">
+            <input class="form-control" type="text" id="roblox-link" name="roblox-link" placeholder="Or paste a Roblox item link to migrate">
         </div>
         <div class="mb-3">
             <input class="form-control" type="text" id="name" name="name" placeholder="Name" required>
@@ -11,16 +14,6 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         {% if GroupIdContext != None %}<input type="hidden" name="groupIdContext" value="{{GroupIdContext}}">{%endif%}
         <button type="submit" class="btn btn-success btn-sm w-100">Create Shirt</button>
-    </form>
-    <div class="linebreak"></div>
-    <p class="m-0 text-secondary mb-2">Or migrate a Shirt from Roblox by pasting its link or id</p>
-    <form action="/develop/migrate/11" method="post">
-        <div class="mb-3">
-            <input class="form-control" type="text" id="roblox-link" name="roblox-link" placeholder="https://www.roblox.com/catalog/123456789/Shirt-Name" required>
-        </div>
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        {% if GroupIdContext != None %}<input type="hidden" name="groupIdContext" value="{{GroupIdContext}}">{%endif%}
-        <button type="submit" class="btn btn-primary btn-sm w-100">Migrate from Roblox</button>
     </form>
     <div class="mt-2">
         {% for shirt in UserClothing: %}

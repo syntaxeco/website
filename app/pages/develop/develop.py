@@ -55,14 +55,8 @@ def CountAlphanumericCharacters( string : str ):
     return count
 
 # --- Roblox classic-clothing migrator ------------------------------------- #
-# Maps a develop page's asset type to the Roblox catalog subcategory, the local
-# rbxmx template used to wrap the downloaded texture, and that template's token.
-_ROBLOX_CLOTHING_TEMPLATES = {
-    11: ("ClassicShirts", "./app/files/Shirt.rbxmx", "ShirtImageId", "Shirt"),
-    12: ("ClassicPants", "./app/files/Pants.rbxmx", "PantsImageId", "Pants"),
-    2:  ("ClassicTShirts", "./app/files/TShirt.rbxmx", "TShirtImageId", "T-Shirt"),
-}
-_CLOTHING_NAME_MAX = 50
+# Lets a user paste a Roblox item link into the normal Create form; the item's
+# texture is downloaded and used in place of the uploaded file.
 
 
 def _extract_roblox_clothing_image_id( content : bytes ):
@@ -110,13 +104,13 @@ def _download_roblox_asset( assetid : int ):
     return None
 
 
-def _migrate_roblox_clothing( asset_type : int, roblox_asset_id : int, target_creator, creator_type : int, uploaded_by : User ):
-    """Pull a Roblox classic clothing item and create a pending Syntax asset.
+def _get_roblox_clothing_file( asset_type : int, roblox_asset_id : int ):
+    """Download a Roblox classic clothing item and return its texture as an in-memory upload.
 
-    Returns (asset, error_message). On failure asset is None.
+    Returns (file, error_message); file is a werkzeug FileStorage on success.
     """
-    subcategory, template_path, template_token, default_name = _ROBLOX_CLOTHING_TEMPLATES[asset_type]
-
+    from werkzeug.datastructures import FileStorage
+    from PIL import Image as _PILImage
     from app.routes.asset import GetOriginalAssetInfo, RatelimittedReachedException, AssetNotFoundException, AssetNotAllowedException
 
     try:
@@ -138,9 +132,6 @@ def _migrate_roblox_clothing( asset_type : int, roblox_asset_id : int, target_cr
     if asset_info.get("AssetTypeId") != expected_type:
         return None, "That Roblox item is not the right asset type for this page"
 
-    ItemName = FilterText(str(asset_info.get("Name") or default_name).strip())[:_CLOTHING_NAME_MAX] or default_name
-    ItemDescription = FilterText(str(asset_info.get("Description") or "Migrated from Roblox"))[:200]
-
     clothing_content = _download_roblox_asset(roblox_asset_id)
     if clothing_content is None:
         return None, "Failed to download that Roblox item"
@@ -153,142 +144,29 @@ def _migrate_roblox_clothing( asset_type : int, roblox_asset_id : int, target_cr
     if texture_content is None:
         return None, "Failed to download the item texture"
 
-    from PIL import Image as _PILImage
     try:
-        _img = _PILImage.open(BytesIO(texture_content))
-        _img.verify()
-        _img = _PILImage.open(BytesIO(texture_content)).convert("RGBA")
-        # Shirts/pants are 585 x 559; t-shirt graphics vary (usually 512 x 512).
-        expected_size = {11: (585, 559), 12: (585, 559), 2: None}[asset_type]
-        if expected_size is not None and _img.size != expected_size:
-            return None, f"That Roblox item's texture is not the standard {expected_size[0]} x {expected_size[1]} size"
-        if _img.size[0] > 2048 or _img.size[1] > 2048:
-            return None, "That Roblox item's texture is too large"
+        img = _PILImage.open(BytesIO(texture_content))
+        img.verify()
+        img = _PILImage.open(BytesIO(texture_content)).convert("RGBA")
     except Exception:
         return None, "The item texture is not a valid image"
+    # Shirts/pants are 585 x 559; t-shirt graphics vary (usually 512 x 512).
+    expected_size = {11: (585, 559), 12: (585, 559), 2: None}[asset_type]
+    if expected_size is not None and img.size != expected_size:
+        return None, f"That Roblox item's texture is not the standard {expected_size[0]} x {expected_size[1]} size"
+    if img.size[0] > 2048 or img.size[1] > 2048:
+        return None, "That Roblox item's texture is too large"
 
-    TextureFile = BytesIO()
-    _img.save(TextureFile, format="PNG")
-    TextureFile.seek(0)
-    TextureContent = TextureFile.read()
-    TextureHash = hashlib.sha512(TextureContent).hexdigest()
-    if not s3helper.DoesKeyExist(TextureHash):
-        s3helper.UploadBytesToS3(TextureContent, TextureHash, contentType="image/png")
+    texture_file = BytesIO()
+    img.save(texture_file, format="PNG")
+    texture_file.seek(0)
+    return FileStorage(stream=texture_file, filename="migrated.png", content_type="image/png"), None
 
-    NewImageAsset : Asset = Asset(
-        name = "Image",
-        description = "",
-        creator_id = target_creator.id,
-        creator_type = creator_type,
-        asset_type = AssetType.Image,
-        created_at = datetime.utcnow()
-    )
-    db.session.add(NewImageAsset)
-    db.session.commit()
-
-    NewImageAssetVersion : AssetVersion = CreateNewAssetVersion(NewImageAsset, TextureHash, UploadedBy = uploaded_by)
-    if NewImageAssetVersion is None:
-        db.session.delete(NewImageAsset)
-        db.session.commit()
-        return None, "Failed to create the migrated image"
-
-    TakeThumbnail( AssetId = NewImageAsset.id, isIcon = False )
-
-    TemplateFile = open(template_path, "r")
-    TemplateContent = TemplateFile.read()
-    TemplateFile.close()
-    TemplateContent = TemplateContent.format(**{template_token: str(NewImageAsset.id)})
-    TemplateHash = hashlib.sha512(TemplateContent.encode()).hexdigest()
-    if not s3helper.DoesKeyExist(TemplateHash):
-        s3helper.UploadBytesToS3(TemplateContent, TemplateHash)
-
-    NewAsset : Asset = Asset(
-        name = ItemName,
-        description = ItemDescription,
-        creator_id = target_creator.id,
-        creator_type = creator_type,
-        asset_type = AssetType(asset_type),
-        created_at = datetime.utcnow(),
-        updated_at = datetime.utcnow(),
-        moderation_status = 1,
-        asset_genre = 1
-    )
-    db.session.add(NewAsset)
-    db.session.commit()
-
-    NewAssetVersion : AssetVersion = CreateNewAssetVersion(NewAsset, TemplateHash, UploadedBy = uploaded_by)
-    if NewAssetVersion is None:
-        db.session.delete(NewAsset)
-        db.session.commit()
-        return None, "Failed to create the migrated asset"
-
-    db.session.add(AssetModerationLink(ParentAssetId = NewAsset.id, ChildAssetId = NewImageAsset.id))
-    db.session.add(UserAsset(userid = uploaded_by.id, assetid = NewAsset.id))
-    db.session.commit()
-
-    TakeThumbnail( AssetId = NewAsset.id )
-    return NewAsset, None
 
 @DevelopPagesRoute.errorhandler( 429 )
 def handle_ratelimit_reached(e):
     flash("You are being rate limited, please try again later", "error")
     return redirect(request.referrer)
-
-@DevelopPagesRoute.route('/develop/migrate/<int:ReqAssetType>', methods=['POST'])
-@auth.authenticated_required
-@limiter.limit("10/minute")
-@user_limiter.limit("10/minute")
-def migrate_roblox_clothing(ReqAssetType):
-    if ReqAssetType not in _ROBLOX_CLOTHING_TEMPLATES:
-        flash("Invalid asset type", "error")
-        return redirect(url_for("DevelopPagesRoute.develop"))
-    if not websiteFeatures.GetWebsiteFeature("AssetCreation"):
-        flash("Asset creation is temporarily disabled", "error")
-        return redirect(url_for("DevelopPagesRoute.develop"))
-
-    AuthenticatedUser : User = auth.GetCurrentUser()
-    TargetCreatorObj : User | Group = AuthenticatedUser
-    CreatorType = 0
-
-    groupIdContext = request.form.get(key = "groupIdContext", default = None, type = int)
-    if groupIdContext is not None and groupIdContext > 0:
-        GroupContext : Group = Group.query.filter_by(id=groupIdContext).first()
-        if GroupContext is None:
-            return abort(404)
-        ViewerGroupRole : GroupRole | None = groups.GetUserRolesetInGroup( AuthenticatedUser, GroupContext )
-        if ViewerGroupRole is None:
-            return abort(403)
-        ViewerRolePermissions : GroupRolePermission = groups.GetRolesetPermission( ViewerGroupRole )
-        if not ViewerRolePermissions.manage_items:
-            return abort(403)
-        if not ViewerRolePermissions.create_items:
-            flash("You do not have permission to create assets in this group", "error")
-            return redirect(url_for("DevelopPagesRoute.develop", groupId=groupIdContext, type=ReqAssetType))
-
-        TargetCreatorObj = GroupContext
-        CreatorType = 1
-
-    CreateLockName = f"createasset_{TargetCreatorObj.id}"
-    CreateLock = redislock.acquire_lock(CreateLockName, acquire_timeout=10, lock_timeout=1)
-    if CreateLock is None:
-        flash("You are creating too many assets at once", "error")
-        return redirect(url_for("DevelopPagesRoute.develop"))
-
-    RobloxAssetId = _resolve_roblox_asset_id(request.form.get("roblox-link", default = None, type = str))
-    if RobloxAssetId is None:
-        redislock.release_lock(CreateLockName, CreateLock)
-        flash("Please enter a valid Roblox item link or id", "error")
-        return redirect(url_for("DevelopPagesRoute.develop", groupId=groupIdContext, type=ReqAssetType))
-
-    NewAsset, ErrorMessage = _migrate_roblox_clothing(ReqAssetType, RobloxAssetId, TargetCreatorObj, CreatorType, AuthenticatedUser)
-    redislock.release_lock(CreateLockName, CreateLock)
-    if NewAsset is None:
-        flash(ErrorMessage or "Failed to migrate that Roblox item", "error")
-        return redirect(url_for("DevelopPagesRoute.develop", groupId=groupIdContext, type=ReqAssetType))
-
-    flash("Item migrated and submitted for moderation", "success")
-    return redirect(url_for("DevelopPagesRoute.develop", groupId=groupIdContext, type=ReqAssetType))
-
 
 @DevelopPagesRoute.route('/develop')
 @auth.authenticated_required
@@ -568,6 +446,17 @@ def create(ReqAssetType):
         ShirtName = FilterText(ShirtName)
 
         ShirtFile = request.files.get("file", default = None)
+        if ShirtFile is None or not ShirtFile.filename:
+            RobloxAssetId = _resolve_roblox_asset_id(request.form.get("roblox-link", default = None, type = str))
+            if RobloxAssetId is None:
+                redislock.release_lock(CreateLockName, CreateLock)
+                flash("Please choose a file or enter a Roblox item link", "error")
+                return redirect(url_for("DevelopPagesRoute.develop", type=11))
+            ShirtFile, MigrateError = _get_roblox_clothing_file(11, RobloxAssetId)
+            if ShirtFile is None:
+                redislock.release_lock(CreateLockName, CreateLock)
+                flash(MigrateError or "Failed to migrate that Roblox item", "error")
+                return redirect(url_for("DevelopPagesRoute.develop", type=11))
         isValidClothingFile = ValidateClothingImage( ShirtFile, returnImage = True )
         if not isValidClothingFile:
             redislock.release_lock(CreateLockName, CreateLock)
@@ -663,6 +552,17 @@ def create(ReqAssetType):
         PantsName = FilterText(PantsName)
 
         PantsFile = request.files.get("file", default = None)
+        if PantsFile is None or not PantsFile.filename:
+            RobloxAssetId = _resolve_roblox_asset_id(request.form.get("roblox-link", default = None, type = str))
+            if RobloxAssetId is None:
+                redislock.release_lock(CreateLockName, CreateLock)
+                flash("Please choose a file or enter a Roblox item link", "error")
+                return redirect(url_for("DevelopPagesRoute.develop", type=12))
+            PantsFile, MigrateError = _get_roblox_clothing_file(12, RobloxAssetId)
+            if PantsFile is None:
+                redislock.release_lock(CreateLockName, CreateLock)
+                flash(MigrateError or "Failed to migrate that Roblox item", "error")
+                return redirect(url_for("DevelopPagesRoute.develop", type=12))
         isValidClothingFile = ValidateClothingImage( PantsFile, returnImage = True )
         if not isValidClothingFile:
             redislock.release_lock(CreateLockName, CreateLock)
@@ -758,6 +658,17 @@ def create(ReqAssetType):
         TShirtName = FilterText(TShirtName)
 
         TShirtFile = request.files.get("file", default = None)
+        if TShirtFile is None or not TShirtFile.filename:
+            RobloxAssetId = _resolve_roblox_asset_id(request.form.get("roblox-link", default = None, type = str))
+            if RobloxAssetId is None:
+                redislock.release_lock(CreateLockName, CreateLock)
+                flash("Please choose a file or enter a Roblox item link", "error")
+                return redirect(url_for("DevelopPagesRoute.develop", type=2))
+            TShirtFile, MigrateError = _get_roblox_clothing_file(2, RobloxAssetId)
+            if TShirtFile is None:
+                redislock.release_lock(CreateLockName, CreateLock)
+                flash(MigrateError or "Failed to migrate that Roblox item", "error")
+                return redirect(url_for("DevelopPagesRoute.develop", type=2))
         isValidClothingFile = ValidateClothingImage( TShirtFile, verifyResolution = False, returnImage = True )
         if not isValidClothingFile:
             redislock.release_lock(CreateLockName, CreateLock)
