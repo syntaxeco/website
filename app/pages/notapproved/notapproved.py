@@ -79,9 +79,7 @@ def not_approved_post():
         UserObj.accountstatus = 1
         db.session.commit()
         return redirect("/")
-    if LatestUserBanObj.ban_type != BanType.Warning:
-        flash("your account has not been reactivated don't try that shi on us", "error")
-        return redirect("/not-approved")
+    
     LatestUserBanObj.acknowledged = True
     UserObj.accountstatus = 1
     db.session.commit()
